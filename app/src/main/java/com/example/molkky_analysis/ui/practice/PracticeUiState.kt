@@ -6,8 +6,8 @@ data class PracticeUiState(
     val currentUserId: Int = 1,
     val currentUserName: String = "Player 1",
     val throwsGroupedByDistance: Map<Float, List<SessionThrowDisplayData>> = emptyMap(),
-    val configuredDistances: List<Float> = listOf(3.0f, 3.5f, 4.0f),
-    val activeDistance: Float? = 3.0f,
+    val configuredDistances: List<Float> = listOf(3.5f, 4.0f, 5.0f),
+    val activeDistance: Float? = 3.5f,
     val selectedAngle: String = "CENTER",
 
     val sessionWeather: String? = null,

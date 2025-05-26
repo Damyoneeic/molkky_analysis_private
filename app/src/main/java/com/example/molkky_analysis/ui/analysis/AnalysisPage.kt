@@ -1,30 +1,30 @@
 package com.example.molkky_analysis.ui.analysis
 
+import android.graphics.Paint as NativePaint // Changed alias for clarity
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.text.style.TextAlign
-// import androidx.compose.ui.tooling.preview.Preview // コメントアウト済み
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.platform.LocalDensity
+// import androidx.compose.ui.text.style.TextAlign // Not directly used in this file's Composables
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.molkky_analysis.data.model.User
 import java.util.Locale
+import kotlin.math.ceil
+import kotlin.math.floor
+// import kotlin.math.max // Not used
 import kotlin.math.roundToInt
 
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AnalysisScreen(
-    viewModel: AnalysisViewModel, // ViewModel を受け取る
+    viewModel: AnalysisViewModel,
     onReturnToHome: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -34,18 +34,18 @@ fun AnalysisScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("分析") },
+                title = { Text("Analysis") },
                 actions = {
                     Box {
                         Button(onClick = { showUserDropdown = true }) {
-                            Text(uiState.selectedUserId?.let { id -> uiState.availableUsers.find { it.id == id }?.name } ?: "全ユーザー")
+                            Text(uiState.selectedUserId?.let { id -> uiState.availableUsers.find { it.id == id }?.name } ?: "All Users")
                         }
                         DropdownMenu(
                             expanded = showUserDropdown,
                             onDismissRequest = { showUserDropdown = false }
                         ) {
                             DropdownMenuItem(
-                                text = { Text("全ユーザー") },
+                                text = { Text("All Users") },
                                 onClick = {
                                     viewModel.selectUser(null)
                                     showUserDropdown = false
@@ -78,36 +78,24 @@ fun AnalysisScreen(
                     CircularProgressIndicator()
                 }
             } else {
-                // サマリー統計表示
                 SummaryStatsCard(stats = uiState.summaryStats)
                 Spacer(Modifier.height(16.dp))
 
-                Text("距離別成功率:", style = MaterialTheme.typography.titleMedium)
+                Text("Success Rate by Distance:", style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(8.dp))
 
                 if (uiState.plotData.isEmpty()) {
-                    Text("表示するデータがありません。")
+                    Text("No data to plot.")
                 } else {
-                    // プロットエリア (簡易的なCanvas描画の例、またはテキスト表示)
-                    DistanceSuccessRatePlot(plotData = uiState.plotData, modifier = Modifier.weight(1f).fillMaxWidth())
-
-                    // 参考：プロットデータをテキストでリスト表示
-                    // LazyColumn(modifier = Modifier.weight(1f)) {
-                    //    items(uiState.plotData) { data ->
-                    //        Text(
-                    //            "距離: ${data.distance}m, 成功率: %.1f%% (%d/%d), エラー: +/- %.1f%%".format(
-                    //                data.successRate * 100,
-                    //                data.successes,
-                    //                data.totalThrows,
-                    //                (data.errorMargin ?: 0f) * 100
-                    //            )
-                    //        )
-                    //    }
-                    // }
+                    DistanceSuccessRatePlot(
+                        plotData = uiState.plotData,
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                    )
                 }
             }
-
-            Spacer(Modifier.weight(1f, fill = false)) // グラフの下に余白を確保しボタンを一番下に
+            Spacer(Modifier.weight(0.1f, fill = false))
             Button(
                 onClick = onReturnToHome,
                 modifier = Modifier
@@ -124,13 +112,13 @@ fun AnalysisScreen(
 fun SummaryStatsCard(stats: SummaryStats) {
     Card(elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)) {
         Column(Modifier.padding(16.dp).fillMaxWidth()) {
-            Text("サマリー", style = MaterialTheme.typography.titleLarge)
+            Text("Summary", style = MaterialTheme.typography.titleLarge)
             Spacer(Modifier.height(8.dp))
-            Text("総投擲回数: ${stats.totalThrows} 回")
-            stats.overallSuccessRate?.let { Text("全体成功率: %.1f %%".format(it * 100)) }
-            stats.averageDistance?.let { Text("平均投擲距離: %.2f m".format(it)) }
+            Text("Total Throws: ${stats.totalThrows}")
+            stats.overallSuccessRate?.let { Text("Overall Success Rate: %.1f %%".format(it * 100)) }
+            stats.averageDistance?.let { Text("Average Throw Distance: %.2f m".format(it)) }
             if (stats.successRateByAngle.isNotEmpty()){
-                Text("角度別成功率:")
+                Text("Success Rate by Angle:")
                 stats.successRateByAngle.forEach { (angle, rate) ->
                     Text("  ${angle.uppercase(Locale.getDefault())}: ${rate?.let { "%.1f %%".format(it * 100)} ?: "N/A"}")
                 }
@@ -143,98 +131,162 @@ fun SummaryStatsCard(stats: SummaryStats) {
 @Composable
 fun DistanceSuccessRatePlot(plotData: List<DistanceSuccessRateData>, modifier: Modifier = Modifier) {
     if (plotData.isEmpty()) {
-        Text("プロットするデータがありません。", modifier = modifier)
+        Text("No data to plot.", modifier = modifier.padding(16.dp))
         return
     }
 
-    // 簡易的なCanvas描画の例
-    // 本格的な描画にはライブラリの利用を推奨
+    val density = LocalDensity.current
+    // Explicitly type the remembered NativePaint objects
+    val textPaint: NativePaint = remember {
+        NativePaint().apply {
+            color = android.graphics.Color.BLACK
+            textSize = with(density) { 12.sp.toPx() }
+            textAlign = NativePaint.Align.CENTER
+        }
+    }
+    val yAxisTextPaint: NativePaint = remember { // This was line 147 context
+        NativePaint().apply {
+            color = android.graphics.Color.BLACK
+            textSize = with(density) { 12.sp.toPx() }
+            textAlign = NativePaint.Align.RIGHT
+        }
+    }
+
+
     Canvas(modifier = modifier.fillMaxSize()) {
-        val padding = 40.dp.toPx() // 軸ラベルなどのためのパディング
-        val chartWidth = size.width - 2 * padding
-        val chartHeight = size.height - 2 * padding
+        val canvasPadding = with(density) { 50.dp.toPx() }
+        val chartWidth = size.width - (canvasPadding * 2)
+        val chartHeight = size.height - (canvasPadding * 2)
 
-        val minDistance = plotData.minOfOrNull { it.distance } ?: 0f
-        val maxDistance = plotData.maxOfOrNull { it.distance } ?: 1f
-        val maxSuccessRate = 1.0f // 成功率は0.0-1.0
+        if (chartWidth <= 0 || chartHeight <= 0) return@Canvas
 
-        // X軸 (距離)
+        val minDistanceActual = plotData.minOfOrNull { it.distance } ?: 0f
+        val maxDistanceActual = plotData.maxOfOrNull { it.distance } ?: 1f
+
+        val axisMinDistance = floor(minDistanceActual)
+        val axisMaxDistance = ceil(maxDistanceActual)
+        val distanceRange = (axisMaxDistance - axisMinDistance).coerceAtLeast(1f)
+
+        val maxSuccessRate = 1.0f
+
+        val originX = canvasPadding
+        val originY = size.height - canvasPadding
+
         drawLine(
             color = Color.Black,
-            start = Offset(padding, size.height - padding),
-            end = Offset(size.width - padding, size.height - padding),
-            strokeWidth = 2.dp.toPx()
-        )
-        // Y軸 (成功率)
-        drawLine(
-            color = Color.Black,
-            start = Offset(padding, padding),
-            end = Offset(padding, size.height - padding),
+            start = Offset(originX, originY),
+            end = Offset(originX + chartWidth, originY),
             strokeWidth = 2.dp.toPx()
         )
 
-        // Y軸の目盛り (0%, 50%, 100%)
-        for (i in 0..2) {
-            val y = size.height - padding - (i / 2f) * chartHeight
+        drawLine(
+            color = Color.Black,
+            start = Offset(originX, originY),
+            end = Offset(originX, originY - chartHeight),
+            strokeWidth = 2.dp.toPx()
+        )
+
+        val xTickCount = floor(distanceRange).toInt() + 1
+        for (i in 0..xTickCount) {
+            val distanceValue = axisMinDistance + i
+            if (distanceValue > axisMaxDistance + 0.1f && i > 0) continue
+
+            val xPos = originX + ((distanceValue - axisMinDistance) / distanceRange) * chartWidth
+
+            if (xPos >= originX && xPos <= originX + chartWidth + 2.dp.toPx()) {
+                drawLine(
+                    color = Color.Gray,
+                    start = Offset(xPos, originY),
+                    end = Offset(xPos, originY + 5.dp.toPx()),
+                    strokeWidth = 1.dp.toPx()
+                )
+                drawContext.canvas.nativeCanvas.drawText(
+                    "${distanceValue.roundToInt()}m",
+                    xPos,
+                    originY + textPaint.textSize + 5.dp.toPx(),
+                    textPaint
+                )
+            }
+        }
+        drawContext.canvas.nativeCanvas.drawText(
+            "Distance (m)",
+            originX + chartWidth / 2,
+            originY + textPaint.textSize * 2 + 10.dp.toPx(),
+            textPaint
+        )
+
+        for (i in 0..5) {
+            val rateValue = i * 0.2f
+            val yPos = originY - (rateValue / maxSuccessRate) * chartHeight
+
             drawLine(
                 color = Color.Gray,
-                start = Offset(padding - 5.dp.toPx(), y),
-                end = Offset(padding, y),
+                start = Offset(originX - 5.dp.toPx(), yPos),
+                end = Offset(originX, yPos),
                 strokeWidth = 1.dp.toPx()
             )
+            drawContext.canvas.nativeCanvas.drawText(
+                "${(rateValue * 100).roundToInt()}%",
+                originX - 10.dp.toPx(),
+                yPos + (yAxisTextPaint.textSize / 3),
+                yAxisTextPaint
+            )
         }
+        val yAxisLabelX = originX - yAxisTextPaint.textSize - 20.dp.toPx()
+        val yAxisLabelY = originY - chartHeight / 2
 
+        drawContext.canvas.nativeCanvas.save()
+        drawContext.canvas.nativeCanvas.rotate(-90f, yAxisLabelX, yAxisLabelY)
+        drawContext.canvas.nativeCanvas.drawText(
+            "Success Rate (%)",
+            yAxisLabelX,
+            yAxisLabelY + textPaint.textSize /2,
+            textPaint
+        )
+        drawContext.canvas.nativeCanvas.restore()
 
         plotData.forEach { data ->
-            val x = padding + ((data.distance - minDistance) / (maxDistance - minDistance).coerceAtLeast(1f)) * chartWidth
-            val y = size.height - padding - (data.successRate / maxSuccessRate) * chartHeight
+            if (data.distance < axisMinDistance || data.distance > axisMaxDistance) {
+                // Points outside defined axis range are not plotted by this logic
+            }
 
-            // データポイント
-            drawCircle(
-                color = Color.Blue,
-                radius = 4.dp.toPx(),
-                center = Offset(x, y)
-            )
+            val x = originX + (((data.distance - axisMinDistance) / distanceRange) * chartWidth)
+            val y = originY - (data.successRate / maxSuccessRate) * chartHeight
 
-            // エラーバー
-            data.errorMargin?.let { margin ->
-                if (margin > 0) { // marginが0やnullでない場合のみ描画
-                    val errorBarHalfHeight = (margin / maxSuccessRate) * chartHeight
-                    val yTop = (y - errorBarHalfHeight).coerceAtLeast(padding)
-                    val yBottom = (y + errorBarHalfHeight).coerceAtMost(size.height - padding)
+            if (x >= originX && x <= originX + chartWidth && y >= originY - chartHeight && y <= originY) {
+                drawCircle(
+                    color = Color.Blue,
+                    radius = 4.dp.toPx(),
+                    center = Offset(x, y)
+                )
 
-                    // エラーバーの縦線
-                    drawLine(
-                        color = Color.Blue,
-                        start = Offset(x, yTop),
-                        end = Offset(x, yBottom),
-                        strokeWidth = 1.dp.toPx()
-                    )
-                    // エラーバーの上下の横線
-                    drawLine(
-                        color = Color.Blue,
-                        start = Offset(x - 4.dp.toPx(), yTop),
-                        end = Offset(x + 4.dp.toPx(), yTop),
-                        strokeWidth = 1.dp.toPx()
-                    )
-                    drawLine(
-                        color = Color.Blue,
-                        start = Offset(x - 4.dp.toPx(), yBottom),
-                        end = Offset(x + 4.dp.toPx(), yBottom),
-                        strokeWidth = 1.dp.toPx()
-                    )
+                data.errorMargin?.let { margin ->
+                    if (margin > 0) {
+                        val errorBarHalfHeight = (margin / maxSuccessRate) * chartHeight
+                        val yTop = (y - errorBarHalfHeight).coerceAtMost(originY).coerceAtLeast(originY - chartHeight)
+                        val yBottom = (y + errorBarHalfHeight).coerceAtMost(originY).coerceAtLeast(originY - chartHeight)
+
+                        drawLine(
+                            color = Color.Blue.copy(alpha = 0.7f),
+                            start = Offset(x, yTop),
+                            end = Offset(x, yBottom),
+                            strokeWidth = 1.dp.toPx()
+                        )
+                        drawLine(
+                            color = Color.Blue.copy(alpha = 0.7f),
+                            start = Offset(x - 4.dp.toPx(), yTop),
+                            end = Offset(x + 4.dp.toPx(), yTop),
+                            strokeWidth = 1.dp.toPx()
+                        )
+                        drawLine(
+                            color = Color.Blue.copy(alpha = 0.7f),
+                            start = Offset(x - 4.dp.toPx(), yBottom),
+                            end = Offset(x + 4.dp.toPx(), yBottom),
+                            strokeWidth = 1.dp.toPx()
+                        )
+                    }
                 }
             }
         }
     }
 }
-
-/* // Previewはコメントアウト済み
-@Preview(showBackground = true)
-@Composable
-fun AnalysisScreenPreview() {
-    Molkky_analysisTheme {
-        // AnalysisScreen( /* ViewModelのモックが必要 */ )
-    }
-}
-*/

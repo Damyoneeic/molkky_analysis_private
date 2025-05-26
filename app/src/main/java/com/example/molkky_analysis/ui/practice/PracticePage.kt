@@ -6,7 +6,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items // items(list, key=...) を使うために必要
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -15,20 +15,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
-// import androidx.compose.ui.platform.LocalContext // ViewModelのプレビュー用インスタンス化がなければ不要
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
-// import androidx.compose.ui.tooling.preview.Preview // コメントアウト済み
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.example.molkky_analysis.ui.theme.Molkky_analysisTheme
 import com.example.molkky_analysis.data.model.User
-import com.example.molkky_analysis.ui.practice.PracticeViewModel
+// import com.example.molkky_analysis.ui.practice.PracticeViewModel // Already imported if in same file
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
 
 // Iconの代わりに表示するシンプルな長方形のComposable (変更なし)
 @Composable
@@ -53,11 +53,11 @@ fun PracticePage(
         ConfirmExitDialog(
             onSave = {
                 viewModel.confirmSaveAndExit()
-                onReturnToHome() // 画面遷移はViewModelの処理が終わった後
+                onReturnToHome()
             },
             onDiscard = {
                 viewModel.confirmDiscardAndExit()
-                onReturnToHome() // 画面遷移はViewModelの処理が終わった後
+                onReturnToHome()
             },
             onCancel = viewModel::cancelExit
         )
@@ -72,18 +72,6 @@ fun PracticePage(
         )
     }
 
-    if (uiState.showUserDialog) { // [cite: 2]
-        // Placeholder User Dialog
-        AlertDialog(
-            onDismissRequest = viewModel::dismissUserDialog,
-            title = { Text("User Management") },
-            text = { Text("User selection/creation UI will be here.") },
-            confirmButton = {
-                Button(onClick = viewModel::dismissUserDialog) { Text("OK") }
-            }
-        )
-    }
-
     if (uiState.showUserDialog) {
         UserManagementDialog(
             availableUsers = uiState.availableUsers,
@@ -91,12 +79,10 @@ fun PracticePage(
             onDismiss = viewModel::dismissUserDialog,
             onUserSelected = { user ->
                 viewModel.switchUser(user.id)
-                viewModel.dismissUserDialog() // 選択後ダイアログを閉じる
+                // viewModel.dismissUserDialog() // Dialog closed by selection or explicit close button
             },
             onAddNewUser = { userName ->
                 viewModel.addNewUser(userName)
-                // addNewUser内で成功すればダイアログは閉じるので、ここでは何もしないか、
-                // エラー時のみダイアログを閉じない等の制御をViewModelで行う
             },
             errorMessage = uiState.userDialogErrorMessage
         )
@@ -105,66 +91,42 @@ fun PracticePage(
     if (uiState.showUserSwitchConfirmDialog) {
         AlertDialog(
             onDismissRequest = viewModel::cancelUserSwitch,
-            title = { Text("ユーザー切り替え") },
-            text = { Text("現在の練習データが保存されていません。保存しますか？") },
+            title = { Text("Switch User") },
+            text = { Text("Current practice data is unsaved. Save changes before switching user?") },
             confirmButton = {
                 Button(onClick = { viewModel.confirmAndSwitchUser(saveCurrent = true) }) {
-                    Text("保存して切り替え")
+                    Text("Save and Switch")
                 }
             },
             dismissButton = {
                 Button(onClick = { viewModel.confirmAndSwitchUser(saveCurrent = false) }) {
-                    Text("破棄して切り替え")
+                    Text("Discard and Switch")
                 }
             },
             properties = androidx.compose.ui.window.DialogProperties(dismissOnBackPress = true, dismissOnClickOutside = true)
         )
     }
 
-    if (uiState.showEnvConfigDialog) { // [cite: 2]
-        // Placeholder Env Config Dialog
-        // ここで実際の環境設定入力UIを作成します。
-        // 簡単な例として、いくつかの TextField を持つ AlertDialog を表示します。
-        var weatherText by remember { mutableStateOf(uiState.sessionWeather ?: "") }
-        var tempText by remember { mutableStateOf(uiState.sessionTemperature?.toString() ?: "") }
-        // 他の環境変数も同様に remember で状態を持つ
-
-        AlertDialog(
-            onDismissRequest = viewModel::dismissEnvConfigDialog,
-            title = { Text("Environment Configuration") },
-            text = {
-                Column {
-                    TextField(
-                        value = weatherText,
-                        onValueChange = { weatherText = it },
-                        label = { Text("Weather") }
-                    )
-                    TextField(
-                        value = tempText,
-                        onValueChange = { tempText = it },
-                        label = { Text("Temperature (°C)") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                    )
-                    // TODO: Add fields for humidity, soil, molkkyWeight
-                }
-            },
-            confirmButton = {
-                Button(onClick = {
-                    viewModel.updateSessionWeather(weatherText.ifEmpty { null })
-                    viewModel.updateSessionTemperature(tempText.toFloatOrNull())
-                    // TODO: Update other env settings
-                    viewModel.dismissEnvConfigDialog()
-                }) { Text("Apply") }
-            },
-            dismissButton = {
-                Button(onClick = viewModel::dismissEnvConfigDialog) { Text("Cancel") }
+    if (uiState.showEnvConfigDialog) {
+        EnvConfigDialog(
+            initialWeather = uiState.sessionWeather,
+            initialTemperature = uiState.sessionTemperature,
+            initialHumidity = uiState.sessionHumidity,
+            initialSoil = uiState.sessionSoil, // Ground maps to soil
+            onDismiss = viewModel::dismissEnvConfigDialog,
+            onApply = { weather, temperature, humidity, soil ->
+                viewModel.updateSessionWeather(weather)
+                viewModel.updateSessionTemperature(temperature)
+                viewModel.updateSessionHumidity(humidity)
+                viewModel.updateSessionSoil(soil) // Ground maps to soil
+                viewModel.dismissEnvConfigDialog()
             }
         )
     }
 
 
     // --- Back Handler for Unsaved Data ---
-    BackHandler(enabled = uiState.isDirty) { // [cite: 2]
+    BackHandler(enabled = uiState.isDirty) {
         viewModel.requestExitConfirmation()
     }
 
@@ -178,32 +140,29 @@ fun PracticePage(
                 .fillMaxSize(),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Name Button & Env Config Button [cite: 2]
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Button(onClick = viewModel::onNameButtonClicked) { // Connect to ViewModel
-                    SimpleRectanglePlaceholder() // Placeholder for icon
+                Button(onClick = viewModel::onNameButtonClicked) {
+                    SimpleRectanglePlaceholder()
                     Spacer(Modifier.width(8.dp))
                     Text(uiState.currentUserName)
                 }
-                Button(onClick = viewModel::onEnvConfigButtonClicked) { // Connect to ViewModel
-                    SimpleRectanglePlaceholder() // Placeholder for icon
+                Button(onClick = viewModel::onEnvConfigButtonClicked) {
+                    SimpleRectanglePlaceholder()
                     Spacer(Modifier.width(8.dp))
                     Text("Env Config")
                 }
             }
             Spacer(Modifier.height(16.dp))
 
-            // Session Tabs (Placeholder UI) [cite: 2]
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text("Session:", style = MaterialTheme.typography.titleSmall)
-                // Example: static tabs for now
                 listOf("1", "2", "+").forEach { tabLabel ->
                     Button(onClick = { /* TODO: viewModel.selectSession(tabLabel) */ }) {
                         Text(tabLabel)
@@ -212,7 +171,6 @@ fun PracticePage(
             }
             Spacer(Modifier.height(16.dp))
 
-            // Angle Selector (Existing, no changes needed here) [cite: 2]
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceEvenly,
@@ -224,74 +182,47 @@ fun PracticePage(
             }
             Spacer(Modifier.height(16.dp))
 
-            // OK / FAIL Buttons (Existing, no changes needed here) [cite: 2]
-
-//            Row(
-//                modifier = Modifier.fillMaxWidth(),
-//                horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally)
-//            ) {
-//                Button(
-//                    onClick = { viewModel.addThrow(true) },
-//                    modifier = Modifier.weight(1f),
-//                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFADDDCE)),
-//                    enabled = uiState.activeDistance != null // Enable only if a distance is active
-//                ) { Text("OK", fontSize = 18.sp) }
-//                Button(
-//                    onClick = { viewModel.addThrow(false) },
-//                    modifier = Modifier.weight(1f),
-//                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFC0CB)),
-//                    enabled = uiState.activeDistance != null // Enable only if a distance is active
-//                ) { Text("FAIL", fontSize = 18.sp) }
-//            }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally)
             ) {
-                val isButtonActuallyEnabled = uiState.activeDistance != null // ★ 条件を変数に格納
+                val isButtonActuallyEnabled = uiState.activeDistance != null
 
                 Button(
                     onClick = {
-                        android.util.Log.d("PracticePage", "OK Button clicked. activeDistance: ${uiState.activeDistance}")
-                        if (isButtonActuallyEnabled) { // ★ 再度ここでチェック
+                        if (isButtonActuallyEnabled) {
                             viewModel.addThrow(true)
-                        } else {
-                            android.util.Log.w("PracticePage", "OK Button was clicked but it should be disabled!")
                         }
                     },
                     modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = if (isButtonActuallyEnabled) Color(0xFFADDDCE) else MaterialTheme.colorScheme.surfaceVariant, // ★ 色も明示的に変えてみる
+                        containerColor = if (isButtonActuallyEnabled) Color(0xFFADDDCE) else MaterialTheme.colorScheme.surfaceVariant,
                         contentColor = if (isButtonActuallyEnabled) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
                     ),
-                    enabled = isButtonActuallyEnabled // ★ ここは変更なし
+                    enabled = isButtonActuallyEnabled
                 ) { Text("OK", fontSize = 18.sp) }
 
                 Button(
                     onClick = {
-                        android.util.Log.d("PracticePage", "FAIL Button clicked. activeDistance: ${uiState.activeDistance}")
-                        if (isButtonActuallyEnabled) { // ★ 再度ここでチェック
+                        if (isButtonActuallyEnabled) {
                             viewModel.addThrow(false)
-                        } else {
-                            android.util.Log.w("PracticePage", "FAIL Button was clicked but it should be disabled!")
                         }
                     },
                     modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = if (isButtonActuallyEnabled) Color(0xFFFFC0CB) else MaterialTheme.colorScheme.surfaceVariant, // ★ 色も明示的に変えてみる
+                        containerColor = if (isButtonActuallyEnabled) Color(0xFFFFC0CB) else MaterialTheme.colorScheme.surfaceVariant,
                         contentColor = if (isButtonActuallyEnabled) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
                     ),
-                    enabled = isButtonActuallyEnabled // ★ ここは変更なし
+                    enabled = isButtonActuallyEnabled
                 ) { Text("FAIL", fontSize = 18.sp) }
             }
             Spacer(Modifier.height(16.dp))
 
-            // Distance Rows / List [cite: 3]
-            // Iterates over configuredDistances and gets counts from throwsGroupedByDistance
             if (uiState.configuredDistances.isEmpty()) {
-                Text("「+ 距離追加」ボタンで練習する距離を追加してください。", modifier = Modifier.padding(vertical = 20.dp))
+                Text("Add practice distances using the '+ Add Distance' button.", modifier = Modifier.padding(vertical = 20.dp))
             } else {
                 LazyColumn(modifier = Modifier.weight(1f)) {
-                    items(uiState.configuredDistances, key = { it }) { distance -> // Use configuredDistances
+                    items(uiState.configuredDistances, key = { it }) { distance ->
                         val throwsAtThisDistance = uiState.throwsGroupedByDistance[distance] ?: emptyList()
                         val successes = throwsAtThisDistance.count { it.isSuccess }
                         val attempts = throwsAtThisDistance.size
@@ -309,17 +240,15 @@ fun PracticePage(
             }
             Spacer(Modifier.height(8.dp))
 
-
-            // Add Distance Row Button & Undo Button [cite: 3]
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Button(
-                    onClick = viewModel::requestAddDistance, // Connect to ViewModel
+                    onClick = viewModel::requestAddDistance,
                     modifier = Modifier.weight(1f)
                 ) {
-                    SimpleRectanglePlaceholder() // Placeholder for icon
+                    SimpleRectanglePlaceholder()
                     Spacer(Modifier.width(4.dp))
                     Text("Add Distance")
                 }
@@ -328,14 +257,13 @@ fun PracticePage(
                     enabled = uiState.canUndo,
                     modifier = Modifier.weight(1f)
                 ) {
-                    SimpleRectanglePlaceholder() // Placeholder for icon
+                    SimpleRectanglePlaceholder()
                     Spacer(Modifier.width(4.dp))
                     Text("Undo")
                 }
             }
             Spacer(Modifier.height(16.dp))
 
-            // Save Button & Return Button [cite: 3]
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceEvenly
@@ -345,7 +273,7 @@ fun PracticePage(
                     enabled = uiState.isDirty
                 ) { Text("Save") }
                 Button(onClick = {
-                    if (uiState.isDirty) { // [cite: 2]
+                    if (uiState.isDirty) {
                         viewModel.requestExitConfirmation()
                     } else {
                         onReturnToHome()
@@ -355,6 +283,124 @@ fun PracticePage(
         }
     }
 }
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun EnvConfigDialog(
+    initialWeather: String?,
+    initialTemperature: Float?,
+    initialHumidity: Float?,
+    initialSoil: String?, // Represents Ground
+    onDismiss: () -> Unit,
+    onApply: (weather: String?, temperature: Float?, humidity: Float?, soil: String?) -> Unit
+) {
+    var weather by remember { mutableStateOf(initialWeather ?: "") }
+    var temperatureText by remember { mutableStateOf(initialTemperature?.toString() ?: "") }
+    var humidityText by remember { mutableStateOf(initialHumidity?.toString() ?: "") }
+    var ground by remember { mutableStateOf(initialSoil ?: "") } // Ground selection stored in 'soil'
+
+    val weatherOptions = listOf("Sunny", "Cloudy", "Snowy", "Rainy", "Indoors")
+    var weatherExpanded by remember { mutableStateOf(false) }
+
+    val groundOptions = listOf("Soil", "Hard Court", "Lawn", "Artificial Grass")
+    var groundExpanded by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Environment Configuration") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                // Weather Dropdown
+                Box {
+                    OutlinedTextField(
+                        value = weather,
+                        onValueChange = { }, // Not directly changed by typing
+                        label = { Text("Weather") },
+                        readOnly = true,
+                        trailingIcon = { Icon(Icons.Filled.ArrowDropDown, "Select Weather", Modifier.clickable { weatherExpanded = true }) },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    DropdownMenu(
+                        expanded = weatherExpanded,
+                        onDismissRequest = { weatherExpanded = false },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        weatherOptions.forEach { selectionOption ->
+                            DropdownMenuItem(
+                                text = { Text(selectionOption) },
+                                onClick = {
+                                    weather = selectionOption
+                                    weatherExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+
+                // Temperature TextField
+                OutlinedTextField(
+                    value = temperatureText,
+                    onValueChange = { temperatureText = it },
+                    label = { Text("Temperature (°C)") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                // Humidity TextField
+                OutlinedTextField(
+                    value = humidityText,
+                    onValueChange = { humidityText = it },
+                    label = { Text("Humidity (%)") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                // Ground (Soil) Dropdown
+                Box {
+                    OutlinedTextField(
+                        value = ground,
+                        onValueChange = { }, // Not directly changed by typing
+                        label = { Text("Ground") },
+                        readOnly = true,
+                        trailingIcon = { Icon(Icons.Filled.ArrowDropDown, "Select Ground", Modifier.clickable { groundExpanded = true }) },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    DropdownMenu(
+                        expanded = groundExpanded,
+                        onDismissRequest = { groundExpanded = false },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        groundOptions.forEach { selectionOption ->
+                            DropdownMenuItem(
+                                text = { Text(selectionOption) },
+                                onClick = {
+                                    ground = selectionOption
+                                    groundExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = {
+                onApply(
+                    weather.ifEmpty { null },
+                    temperatureText.toFloatOrNull(),
+                    humidityText.toFloatOrNull(),
+                    ground.ifEmpty { null } // This is for the 'soil' field
+                )
+            }) { Text("Apply") }
+        },
+        dismissButton = {
+            Button(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
+}
+
 
 // AddDistanceDialog Composable
 @OptIn(ExperimentalMaterial3Api::class)
@@ -366,53 +412,55 @@ fun AddDistanceDialog(
     var distanceText by remember { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("新しい距離を追加") },
+        title = { Text("Add New Distance") },
         text = {
             OutlinedTextField(
                 value = distanceText,
                 onValueChange = { distanceText = it },
-                label = { Text("距離 (m)") },
+                label = { Text("Distance (m)") },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
             )
         },
         confirmButton = {
             Button(onClick = { onConfirm(distanceText) }) {
-                Text("追加")
+                Text("Add")
             }
         },
         dismissButton = {
             Button(onClick = onDismiss) {
-                Text("キャンセル")
+                Text("Cancel")
             }
         }
     )
 }
 
 
-// AngleButton Composable (変更なし)
+// AngleButton Composable
 @Composable
 fun AngleButton(label: String, isSelected: Boolean, onClick: () -> Unit) {
-    // ... (previous implementation)
     Button(
         onClick = onClick,
         shape = MaterialTheme.shapes.medium,
         colors = ButtonDefaults.buttonColors(
-            containerColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
+            containerColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+            contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
         ),
-        modifier = Modifier.size(width = 100.dp, height = 60.dp)
+        modifier = Modifier.size(width = 100.dp, height = 60.dp) // Adjusted size for consistency
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            // Placeholder for an icon or visual representation of the angle
             SimpleRectanglePlaceholder(
-                modifier = Modifier.size(width = 40.dp, height = 20.dp),
-                color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                modifier = Modifier.size(width = 40.dp, height = 20.dp), // Example size
+                color = if (isSelected) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
             )
-            // Text(label, fontSize = 10.sp) // 必要ならラベルも表示
+            Spacer(Modifier.height(4.dp))
+            Text(label, fontSize = 10.sp) // Display the label text
         }
     }
 }
 
-// DistanceRowItem Composable (変更なし)
+// DistanceRowItem Composable
 @Composable
 fun DistanceRowItem(
     distance: Float,
@@ -422,7 +470,6 @@ fun DistanceRowItem(
     onTap: () -> Unit,
     onLongPress: () -> Unit
 ) {
-    // ... (previous implementation)
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -430,28 +477,27 @@ fun DistanceRowItem(
             .background(if (isActive) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant)
             .border(2.dp, if (isActive) MaterialTheme.colorScheme.primary else Color.Transparent, MaterialTheme.shapes.medium)
             .clickable(onClick = onTap)
-            //.pointerInput(Unit) { detectTapGestures(onLongPress = { onLongPress() }) } // 必要であれば長押し対応
+            //.pointerInput(Unit) { detectTapGestures(onLongPress = { onLongPress() }) } // Enable if long press needed
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Text("${distance}m", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        Text("${String.format("%.1f", distance)}m", fontSize = 18.sp, fontWeight = FontWeight.Bold) // Format distance
         Text("$successCount / $attemptCount", fontSize = 18.sp)
     }
 }
 
-// ConfirmExitDialog Composable (変更なし)
+// ConfirmExitDialog Composable
 @Composable
 fun ConfirmExitDialog(
     onSave: () -> Unit,
     onDiscard: () -> Unit,
     onCancel: () -> Unit
 ) {
-    // ... (previous implementation)
     AlertDialog(
         onDismissRequest = onCancel,
         title = { Text("Unsaved Changes") },
-        text = { Text("There are unsaved changes. Do you want to save them?") },
+        text = { Text("There are unsaved changes. Do you want to save them before exiting?") },
         confirmButton = {
             Button(onClick = onSave) { Text("Save") }
         },
@@ -478,24 +524,30 @@ fun UserManagementDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("ユーザー管理") },
+        title = { Text("User Management") },
         text = {
             Column {
                 if (availableUsers.isNotEmpty()) {
-                    Text("既存のユーザーを選択:", style = MaterialTheme.typography.titleMedium)
+                    Text("Select existing user:", style = MaterialTheme.typography.titleMedium)
                     Spacer(Modifier.height(8.dp))
-                    LazyColumn(modifier = Modifier.heightIn(max = 200.dp)) { // 高さに制限を設ける
+                    LazyColumn(modifier = Modifier.heightIn(max = 200.dp)) {
                         items(availableUsers, key = { it.id }) { user ->
                             Row(
                                 Modifier
                                     .fillMaxWidth()
-                                    .clickable { onUserSelected(user) }
+                                    .clickable {
+                                        onUserSelected(user)
+                                        // onDismiss() // Optionally close dialog on selection
+                                    }
                                     .padding(vertical = 8.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 RadioButton(
                                     selected = (user.id == currentUser?.id),
-                                    onClick = { onUserSelected(user) }
+                                    onClick = {
+                                        onUserSelected(user)
+                                        // onDismiss() // Optionally close dialog on selection
+                                    }
                                 )
                                 Spacer(Modifier.width(8.dp))
                                 Text(user.name)
@@ -505,22 +557,22 @@ fun UserManagementDialog(
                     HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
                 }
 
-                Text("新しいユーザーを作成:", style = MaterialTheme.typography.titleMedium)
+                Text("Create new user:", style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
                     value = newUserName,
                     onValueChange = { newUserName = it },
-                    label = { Text("新しいユーザー名") },
+                    label = { Text("New user name") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth().focusRequester(focusRequester),
                     keyboardActions = KeyboardActions(onDone = {
                         if (newUserName.isNotBlank()) {
                             onAddNewUser(newUserName)
-                            newUserName = "" // 成功したらクリア
+                            // newUserName = "" // Cleared by ViewModel or if dialog stays open
                         }
                         keyboardController?.hide()
                     }),
-                    isError = errorMessage != null // エラーがあればTextFieldもエラー表示にするなど
+                    isError = errorMessage != null
                 )
                 errorMessage?.let {
                     Text(
@@ -535,37 +587,24 @@ fun UserManagementDialog(
                     onClick = {
                         if (newUserName.isNotBlank()) {
                             onAddNewUser(newUserName)
-                            // newUserName = "" // ViewModel側で成功時にダイアログを閉じるならここでのクリアは不要かも
                         }
                     },
                     enabled = newUserName.isNotBlank(),
                     modifier = Modifier.align(Alignment.End)
                 ) {
-                    Text("作成")
+                    Text("Create")
                 }
-                // ダイアログ初回表示時にTextFieldにフォーカスを当てる (オプション)
                 LaunchedEffect(Unit) {
-                    focusRequester.requestFocus()
+                    if (availableUsers.isEmpty()) focusRequester.requestFocus()
                 }
             }
         },
-        confirmButton = {
-            // 通常、このダイアログでは選択または作成が主なので、
-            // OKボタンは必須ではないかもしれない。ここでは閉じるボタンのみ。
-        },
+        confirmButton = {}, // Actions are inline or via dismiss
         dismissButton = {
             Button(onClick = onDismiss) {
-                Text("閉じる")
+                Text("Close")
             }
         },
         properties = androidx.compose.ui.window.DialogProperties(dismissOnBackPress = true, dismissOnClickOutside = true)
     )
 }
-
-/* // Preview関連はコメントアウト済み
-@Preview(showBackground = true, widthDp = 400, heightDp = 800)
-@Composable
-fun PracticePagePreview() {
-    // ...
-}
-*/
