@@ -4,29 +4,29 @@ import com.example.molkky_analysis.data.local.ThrowDao
 import com.example.molkky_analysis.data.model.ThrowDraft
 import kotlinx.coroutines.flow.Flow
 
-class ThrowRepository(private val throwDao: ThrowDao) {
+class ThrowRepository(private val throwDao: ThrowDao) : IThrowRepository { // IThrowRepository を実装
 
-    suspend fun insertDraft(draft: ThrowDraft) { // [cite: 12]
+    override suspend fun insertDraft(draft: ThrowDraft) { // override を追加
         throwDao.insertDraft(draft)
     }
 
-    suspend fun deleteLastDraft(userId: Int) { // [cite: 13]
+    override suspend fun deleteLastDraft(userId: Int) { // override を追加
         throwDao.deleteLastDraftForUser(userId)
     }
 
-    fun getDrafts(userId: Int): Flow<List<ThrowDraft>> {
+    override fun getDrafts(userId: Int): Flow<List<ThrowDraft>> { // override を追加
         return throwDao.getDraftsForUser(userId)
     }
 
-    fun getDraftCount(userId: Int): Flow<Int> {
+    override fun getDraftCount(userId: Int): Flow<Int> { // override を追加
         return throwDao.getDraftCountForUser(userId)
     }
 
-    suspend fun commitDrafts(userId: Int) { // [cite: 12]
+    override suspend fun commitDrafts(userId: Int) { // override を追加 [cite: 12]
         throwDao.commitDraftsToFinalForUser(userId)
     }
 
-    suspend fun clearAllDrafts(userId: Int) {
+    override suspend fun clearAllDrafts(userId: Int) { // override を追加
         throwDao.clearAllDraftsForUser(userId)
     }
 }

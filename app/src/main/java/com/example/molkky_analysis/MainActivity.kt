@@ -25,6 +25,8 @@ import com.example.molkky_analysis.ui.practice.PracticePage
 import com.example.molkky_analysis.ui.practice.PracticeViewModel
 import com.example.molkky_analysis.ui.settings.SettingsScreenLayout // こちらの関数名に合わせています
 import com.example.molkky_analysis.ui.theme.Molkky_analysisTheme
+import com.example.molkky_analysis.data.repository.UserRepository // UserRepository をインポート
+import com.example.molkky_analysis.data.repository.IUserRepository
 
 class MainActivity : ComponentActivity() {
     @SuppressLint("SourceLockedOrientationActivity")
@@ -59,7 +61,10 @@ fun Molkky_analysisApp() {
     val context = LocalContext.current
     val appDatabase = remember { AppDatabase.getDatabase(context) }
     val throwRepository = remember { ThrowRepository(appDatabase.throwDao()) }
-    val practiceViewModelFactory = remember { { userId: Int -> PracticeViewModel(throwRepository, userId) } }
+    val userRepository = remember { UserRepository(appDatabase.userDao()) } // ★ UserRepository を作成
+    val practiceViewModelFactory = remember {
+        { userId: Int -> PracticeViewModel(throwRepository, userRepository, userId) }
+    }
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),

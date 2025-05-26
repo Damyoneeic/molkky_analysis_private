@@ -1,24 +1,38 @@
 package com.example.molkky_analysis.ui.practice
 
-// 仕様書のサンプル (6章) とPracticePageの要素を考慮
+import com.example.molkky_analysis.data.model.User // Userモデルをインポート
+
 data class PracticeUiState(
-    val currentUserId: Int = 1, // 仮のデフォルト。実際には選択/設定されるべき
-    val currentUserName: String = "Player 1", // 仮
+    val currentUserId: Int = 1,
+    val currentUserName: String = "Player 1",
     val throwsGroupedByDistance: Map<Float, List<SessionThrowDisplayData>> = emptyMap(),
-    val activeDistance: Float? = null,
-    val selectedAngle: String = "CENTER", // 'LEFT', 'CENTER', 'RIGHT'
-    // TODO: Environment Config State
-    val canUndo: Boolean = false, // [cite: 16]
-    val isDirty: Boolean = false, // Draft件数 > 0 で true [cite: 16]
-    val showExitConfirmDialog: Boolean = false, // [cite: 17]
-    // TODO: セッションタブの状態
-    // TODO: ユーザー選択ダイアログ、Env Configダイアログの表示状態
+    val configuredDistances: List<Float> = listOf(3.0f, 3.5f, 4.0f),
+    val activeDistance: Float? = 3.0f,
+    val selectedAngle: String = "CENTER",
+
+    val sessionWeather: String? = null,
+    val sessionHumidity: Float? = null,
+    val sessionTemperature: Float? = null,
+    val sessionSoil: String? = null,
+    val sessionMolkkyWeight: Float? = null,
+
+    val canUndo: Boolean = false,
+    val isDirty: Boolean = false,
+
+    val showExitConfirmDialog: Boolean = false,
+    val showAddDistanceDialog: Boolean = false,
+    val showUserDialog: Boolean = false,
+    val showEnvConfigDialog: Boolean = false,
+
+    // ★ Nameボタン関連の新しいState
+    val availableUsers: List<User> = emptyList(),
+    val userDialogErrorMessage: String? = null, // ユーザーダイアログ内のエラーメッセージ用
+    val showUserSwitchConfirmDialog: Boolean = false, // ユーザー切り替え時の確認ダイアログ
+    val pendingUserSwitchId: Int? = null // 切り替えようとしている先のユーザーID
 )
 
-// UI表示用の簡略化された投擲データ
-data class SessionThrowDisplayData(
-    val distance: Float,
-    val isSuccess: Boolean,
-    val angle: String
-    // 必要に応じて他の情報も追加
+data class SessionThrowDisplayData( /* 変更なし */
+                                    val distance: Float,
+                                    val isSuccess: Boolean,
+                                    val angle: String
 )
