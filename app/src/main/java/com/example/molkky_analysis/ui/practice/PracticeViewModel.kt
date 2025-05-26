@@ -297,7 +297,14 @@ class PracticeViewModel(
         }
     }
     // ... (selectDistance, selectAngle, etc. は _uiState を更新するので変更なし)
-    fun selectDistance(distance: Float) { _uiState.update { it.copy(activeDistance = distance) } }
+//    fun selectDistance(distance: Float) { _uiState.update { it.copy(activeDistance = distance) } }
+    fun selectDistance(distance: Float) {
+        android.util.Log.d("PracticeViewModel", "selectDistance CALLED with: $distance") // ★ログ追加
+        _uiState.update {
+            android.util.Log.d("PracticeViewModel", "selectDistance: _uiState updating activeDistance from ${it.activeDistance} to $distance") // ★ログ追加
+            it.copy(activeDistance = distance)
+        }
+    }
     fun selectAngle(angle: String) { _uiState.update { it.copy(selectedAngle = angle) } }
     fun requestAddDistance() { _uiState.update { it.copy(showAddDistanceDialog = true) } }
     fun cancelAddDistance() { _uiState.update { it.copy(showAddDistanceDialog = false) } }

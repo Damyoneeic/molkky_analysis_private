@@ -31,6 +31,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.ui.input.pointer.pointerInput // Import this for detectTapGestures
 import androidx.compose.foundation.gestures.detectTapGestures // Import this for detectTapGestures
+import android.util.Log
 
 // Iconの代わりに表示するシンプルな長方形のComposable (変更なし)
 @Composable
@@ -48,7 +49,11 @@ fun PracticePage(
     viewModel: PracticeViewModel,
     onReturnToHome: () -> Unit
 ) {
+    Log.d("PracticePage_Entry", "PracticePage Composable INVOKED")
     val uiState by viewModel.practiceSessionState.collectAsState()
+    android.util.Log.d("PracticePage", "PracticePage recomposing. uiState.activeDistance: ${uiState.activeDistance}")
+    android.util.Log.d("PracticePage", "uiState.configuredDistances: ${uiState.configuredDistances}")
+    android.util.Log.d("PracticePage", "uiState.configuredDistances size: ${uiState.configuredDistances.size}")
 
     // --- Dialogs ---
     if (uiState.showExitConfirmDialog) {
@@ -244,19 +249,27 @@ fun PracticePage(
             Spacer(Modifier.height(16.dp))
 
             if (uiState.configuredDistances.isEmpty()) {
+                android.util.Log.d("PracticePage", "configuredDistances IS EMPTY, showing Text.")
                 Text("Add practice distances using the '+ Add Distance' button.", modifier = Modifier.padding(vertical = 20.dp))
             } else {
+                android.util.Log.d("PracticePage", "configuredDistances IS NOT EMPTY, showing LazyColumn.")
                 LazyColumn(modifier = Modifier.weight(1f)) {
                     items(uiState.configuredDistances, key = { it }) { distance ->
+                        android.util.Log.d("PracticePage", "LazyColumn item lambda ENTERED for distance: $distance")
                         val throwsAtThisDistance = uiState.throwsGroupedByDistance[distance] ?: emptyList()
                         val successes = throwsAtThisDistance.count { it.isSuccess }
                         val attempts = throwsAtThisDistance.size
+                        val isActive = uiState.activeDistance == distance
+                        android.util.Log.d("PracticePage", "DistanceRowItem for distance: $distance, uiState.activeDistance: ${uiState.activeDistance}, isActive: $isActive")
                         DistanceRowItem(
                             distance = distance,
                             successCount = successes,
                             attemptCount = attempts,
                             isActive = uiState.activeDistance == distance,
-                            onTap = { viewModel.selectDistance(distance) },
+                            onTap = {
+                                viewModel.selectDistance(distance)
+                                android.util.Log.d("PracticePage", "DistanceRowItem TAPPED for distance: $distance")
+                                    },
                             onLongPress = { viewModel.requestDeleteDistance(distance) } // Add long press action
                         )
                         Spacer(Modifier.height(8.dp))
@@ -520,8 +533,8 @@ fun DistanceRowItem(
     successCount: Int,
     attemptCount: Int,
     isActive: Boolean,
-    onTap: () -> Unit,
-    onLongPress: () -> Unit
+    onTap: () -> Unit,    // viewModel.selectDistance(distance) とログを含むラムダ
+    onLongPress: () -> Unit // viewModel.requestDeleteDistance(distance) を含むラムダ
 ) {
     Row(
         modifier = Modifier
@@ -529,13 +542,22 @@ fun DistanceRowItem(
             .clip(MaterialTheme.shapes.medium)
             .background(if (isActive) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant)
             .border(2.dp, if (isActive) MaterialTheme.colorScheme.primary else Color.Transparent, MaterialTheme.shapes.medium)
-            .clickable(onClick = onTap)
-            .pointerInput(Unit) { detectTapGestures(onLongPress = { onLongPress() }) } // Enable long press detection
+            // .clickable(onClick = onTap) // ← この行は削除またはコメントアウト
+            .pointerInput(Unit) { // key = Unit または key = distance など、必要に応じて設定
+                detectTapGestures(
+                    onTap = { _ -> // Offset情報 (_) は今回は使用しない
+                        onTap()  // 渡されてきた onTap コールバックを実行
+                    },
+                    onLongPress = { _ -> // Offset情報 (_) は今回は使用しない
+                        onLongPress() // 渡されてきた onLongPress コールバックを実行
+                    }
+                )
+            }
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Text("${String.format("%.1f", distance)}m", fontSize = 18.sp, fontWeight = FontWeight.Bold) // Format distance
+        Text("${String.format("%.1f", distance)}m", fontSize = 18.sp, fontWeight = FontWeight.Bold)
         Text("$successCount / $attemptCount", fontSize = 18.sp)
     }
 }
