@@ -28,7 +28,11 @@ data class PracticeUiState(
     val availableUsers: List<User> = emptyList(),
     val userDialogErrorMessage: String? = null, // ユーザーダイアログ内のエラーメッセージ用
     val showUserSwitchConfirmDialog: Boolean = false, // ユーザー切り替え時の確認ダイアログ
-    val pendingUserSwitchId: Int? = null // 切り替えようとしている先のユーザーID
+    val pendingUserSwitchId: Int? = null, // 切り替えようとしている先のユーザーID
+
+    // New states for distance deletion confirmation
+    val showDeleteDistanceConfirmDialog: Boolean = false,
+    val distanceToDelete: Float? = null
 )
 
 data class SessionThrowDisplayData( /* 変更なし */

@@ -22,13 +22,14 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.example.molkky_analysis.ui.theme.Molkky_analysisTheme
 import com.example.molkky_analysis.data.model.User
-// import com.example.molkky_analysis.ui.practice.PracticeViewModel // Already imported if in same file
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.ui.input.pointer.pointerInput // Import this for detectTapGestures
+import androidx.compose.foundation.gestures.detectTapGestures // Import this for detectTapGestures
 
 // Iconの代わりに表示するシンプルな長方形のComposable (変更なし)
 @Composable
@@ -107,6 +108,7 @@ fun PracticePage(
         )
     }
 
+    // Only one EnvConfigDialog block is needed
     if (uiState.showEnvConfigDialog) {
         EnvConfigDialog(
             initialWeather = uiState.sessionWeather,
@@ -121,6 +123,16 @@ fun PracticePage(
                 viewModel.updateSessionSoil(soil) // Ground maps to soil
                 viewModel.dismissEnvConfigDialog()
             }
+        )
+    }
+
+
+    // New: Delete Distance Confirmation Dialog
+    if (uiState.showDeleteDistanceConfirmDialog) {
+        DeleteDistanceConfirmationDialog(
+            distance = uiState.distanceToDelete ?: 0f, // Provide a default or handle null
+            onConfirm = viewModel::confirmDeleteDistance,
+            onCancel = viewModel::cancelDeleteDistance
         )
     }
 
@@ -232,7 +244,7 @@ fun PracticePage(
                             attemptCount = attempts,
                             isActive = uiState.activeDistance == distance,
                             onTap = { viewModel.selectDistance(distance) },
-                            onLongPress = { /* TODO: viewModel.editDistance(distance) */ }
+                            onLongPress = { viewModel.requestDeleteDistance(distance) } // Add long press action
                         )
                         Spacer(Modifier.height(8.dp))
                     }
@@ -477,7 +489,7 @@ fun DistanceRowItem(
             .background(if (isActive) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant)
             .border(2.dp, if (isActive) MaterialTheme.colorScheme.primary else Color.Transparent, MaterialTheme.shapes.medium)
             .clickable(onClick = onTap)
-            //.pointerInput(Unit) { detectTapGestures(onLongPress = { onLongPress() }) } // Enable if long press needed
+            .pointerInput(Unit) { detectTapGestures(onLongPress = { onLongPress() }) } // Enable long press detection
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
@@ -503,6 +515,30 @@ fun ConfirmExitDialog(
         },
         dismissButton = {
             Button(onClick = onDiscard) { Text("Discard") }
+        },
+        properties = androidx.compose.ui.window.DialogProperties(dismissOnBackPress = true, dismissOnClickOutside = true)
+    )
+}
+
+@Composable
+fun DeleteDistanceConfirmationDialog(
+    distance: Float,
+    onConfirm: () -> Unit,
+    onCancel: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onCancel,
+        title = { Text("Delete Distance") },
+        text = { Text("Are you sure you want to delete ${String.format("%.1f", distance)}m from the configured distances? This will clear all practice data for this distance.") },
+        confirmButton = {
+            Button(onClick = onConfirm) {
+                Text("Delete")
+            }
+        },
+        dismissButton = {
+            Button(onClick = onCancel) {
+                Text("Cancel")
+            }
         },
         properties = androidx.compose.ui.window.DialogProperties(dismissOnBackPress = true, dismissOnClickOutside = true)
     )

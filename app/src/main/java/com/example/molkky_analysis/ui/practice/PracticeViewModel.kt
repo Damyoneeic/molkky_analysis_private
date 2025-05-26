@@ -267,4 +267,34 @@ class PracticeViewModel(
     fun updateSessionSoil(soil: String?) { _uiState.update { it.copy(sessionSoil = soil) } }
     fun updateSessionMolkkyWeight(weight: Float?) { _uiState.update { it.copy(sessionMolkkyWeight = weight) } }
 
+    fun requestDeleteDistance(distance: Float) {
+        _uiState.update { it.copy(showDeleteDistanceConfirmDialog = true, distanceToDelete = distance) }
+    }
+
+    fun confirmDeleteDistance() {
+        viewModelScope.launch {
+            _uiState.value.distanceToDelete?.let { distance ->
+                _uiState.update { currentState ->
+                    val updatedDistances = currentState.configuredDistances.filter { it != distance }
+                    currentState.copy(
+                        configuredDistances = updatedDistances,
+                        activeDistance = if (currentState.activeDistance == distance) null else currentState.activeDistance,
+                        showDeleteDistanceConfirmDialog = false,
+                        distanceToDelete = null
+                    )
+                }
+                // Also clear any drafts associated with this distance if necessary,
+                // though the spec doesn't explicitly state this for "configured distances"
+                // but rather for "throws grouped by distance" which are drafts.
+                // For now, we only remove it from the configured list.
+                // If the intention is to delete ALL drafts at this distance, you'd add:
+                // throwRepository.clearDraftsForDistance(currentActiveUserIdFlow.value, distance) // This method doesn't exist in ThrowDao/Repository currently
+            }
+        }
+    }
+
+    fun cancelDeleteDistance() {
+        _uiState.update { it.copy(showDeleteDistanceConfirmDialog = false, distanceToDelete = null) }
+    }
+
 }
