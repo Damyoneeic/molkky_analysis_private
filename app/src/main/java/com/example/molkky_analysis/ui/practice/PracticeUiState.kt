@@ -3,7 +3,7 @@ package com.example.molkky_analysis.ui.practice
 import com.example.molkky_analysis.data.model.User // Userモデルをインポート
 
 data class PracticeUiState(
-    val currentUserId: Int = 1,
+    val currentUserId: Int = 1, // Default to Player 1 if available
     val currentUserName: String = "Player 1",
     val throwsGroupedByDistance: Map<Float, List<SessionThrowDisplayData>> = emptyMap(),
     val configuredDistances: List<Float> = listOf(4.0f),
@@ -24,19 +24,20 @@ data class PracticeUiState(
     val showUserDialog: Boolean = false,
     val showEnvConfigDialog: Boolean = false,
 
-    // ★ Nameボタン関連の新しいState
     val availableUsers: List<User> = emptyList(),
-    val userDialogErrorMessage: String? = null, // ユーザーダイアログ内のエラーメッセージ用
-    val showUserSwitchConfirmDialog: Boolean = false, // ユーザー切り替え時の確認ダイアログ
-    val pendingUserSwitchId: Int? = null, // 切り替えようとしている先のユーザーID
+    val userDialogErrorMessage: String? = null,
+    val showUserSwitchConfirmDialog: Boolean = false,
+    val pendingUserSwitchId: Int? = null,
 
-    // New states for distance deletion confirmation
     val showDeleteDistanceConfirmDialog: Boolean = false,
-    val distanceToDelete: Float? = null
+    val distanceToDelete: Float? = null,
+    val showDeleteUserConfirmDialog: Boolean = false,
+    val userToDelete: User? = null
+
 )
 
-data class SessionThrowDisplayData( /* 変更なし */
-                                    val distance: Float,
-                                    val isSuccess: Boolean,
-                                    val angle: String
+data class SessionThrowDisplayData(
+    val distance: Float,
+    val isSuccess: Boolean,
+    val angle: String
 )

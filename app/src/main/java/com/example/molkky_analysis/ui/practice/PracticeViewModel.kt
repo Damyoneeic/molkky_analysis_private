@@ -72,6 +72,7 @@ class PracticeViewModel(
                 canUndo = drafts.isNotEmpty(),
                 isDirty = drafts.isNotEmpty(),
                 configuredDistances = allDisplayDistances,
+                activeDistance = currentLocalState.activeDistance,
                 availableUsers = users
             )
         }.stateIn(
@@ -103,7 +104,9 @@ class PracticeViewModel(
                 sessionSoil = null,
                 sessionMolkkyWeight = null,
                 showUserSwitchConfirmDialog = false,
-                pendingUserSwitchId = null
+                pendingUserSwitchId = null,
+                userToDelete = null,
+                showDeleteUserConfirmDialog = false
             )
         }
     }
@@ -167,8 +170,9 @@ class PracticeViewModel(
 
     fun addThrow(isSuccess: Boolean) {
         viewModelScope.launch {
-            val currentUiState = practiceSessionState.value // combineされた最新の状態
-            val currentDistance = currentUiState.activeDistance
+//            val currentUiState = practiceSessionState.value // combineされた最新の状態
+//            val currentDistance = currentUiState.activeDistance
+            val currentDistance = _uiState.value.activeDistance
             val activeUserIdForDraft = _currentActiveUserIdFlow.value // ★ 常に最新のユーザーIDを使用
 
             android.util.Log.d(
@@ -186,14 +190,20 @@ class PracticeViewModel(
             val newDraft = ThrowDraft(
                 userId = activeUserIdForDraft, // ★ _currentActiveUserIdFlow.value を使用
                 distance = currentDistance,
-                angle = currentUiState.selectedAngle,
+//                angle = currentUiState.selectedAngle,
+                angle = _uiState.value.selectedAngle,
                 isSuccess = isSuccess,
                 timestamp = Date().time,
-                weather = currentUiState.sessionWeather,
-                humidity = currentUiState.sessionHumidity,
-                temperature = currentUiState.sessionTemperature,
-                soil = currentUiState.sessionSoil,
-                molkkyWeight = currentUiState.sessionMolkkyWeight
+//                weather = currentUiState.sessionWeather,
+//                humidity = currentUiState.sessionHumidity,
+//                temperature = currentUiState.sessionTemperature,
+//                soil = currentUiState.sessionSoil,
+//                molkkyWeight = currentUiState.sessionMolkkyWeight
+                weather = _uiState.value.sessionWeather, // ★ 環境情報も _uiState から取得
+                humidity = _uiState.value.sessionHumidity,
+                temperature = _uiState.value.sessionTemperature,
+                soil = _uiState.value.sessionSoil,
+                molkkyWeight = _uiState.value.sessionMolkkyWeight
             )
             android.util.Log.d("ViewModelAddThrow", "Attempting to insert draft for userId $activeUserIdForDraft: $newDraft")
             try {
@@ -204,6 +214,65 @@ class PracticeViewModel(
             }
         }
     }
+
+    fun requestDeleteUser(user: User) {
+        // Prevent deleting the last user
+        if (availableUsers.value.size <= 1) {
+            _uiState.update { it.copy(userDialogErrorMessage = "Cannot delete the last user.") }
+            return
+        }
+        // Prevent deleting the currently active user directly
+        if (user.id == _currentActiveUserIdFlow.value) {
+            _uiState.update { it.copy(userDialogErrorMessage = "Cannot delete the currently active user. Switch user first.") }
+            return
+        }
+        // Optional: Prevent deleting a specific default user e.g., "Player 1" with ID 1
+        if (user.id == 1 && user.name == "Player 1") {
+            _uiState.update { it.copy(userDialogErrorMessage = "Cannot delete the default 'Player 1'.") }
+            return
+        }
+        _uiState.update { it.copy(showDeleteUserConfirmDialog = true, userToDelete = user) }
+    }
+
+    fun confirmDeleteUser() {
+        viewModelScope.launch {
+            _uiState.value.userToDelete?.let { user ->
+                try {
+                    userRepository.deleteUser(user)
+                    _uiState.update {
+                        it.copy(
+                            showDeleteUserConfirmDialog = false,
+                            userToDelete = null,
+                            userDialogErrorMessage = null
+                        )
+                    }
+                    val currentUsers = availableUsers.value // Re-fetch or rely on flow update
+                    if (currentUsers.isNotEmpty() && currentUsers.none{ it.id == _currentActiveUserIdFlow.value }) {
+                        _currentActiveUserIdFlow.value = currentUsers.first().id
+                    } else if (currentUsers.isEmpty()) {
+                        // This should be prevented by the requestDeleteUser logic.
+                        // As a fallback, ensure a default user exists or is created.
+                        // The AppDatabase callback should have created "Player 1" with ID 1.
+                        // If for some reason it was deleted and no users are left, this is problematic.
+                        // For now, assume requestDeleteUser prevents reaching zero users.
+                        // If needed, insert a default user:
+                        // val defaultUser = User(id = 1, name = "Player 1", created_at = System.currentTimeMillis())
+                        // userRepository.insertUser(defaultUser) // Be cautious with hardcoded ID
+                        // _currentActiveUserIdFlow.value = 1
+                        android.util.Log.e("ViewModelDeleteUser", "All users were deleted, this state should be prevented.")
+                    }
+
+                } catch (e: Exception) {
+                    _uiState.update { it.copy(userDialogErrorMessage = "Error deleting user: ${e.message}") }
+                }
+            }
+        }
+    }
+
+    fun cancelDeleteUser() {
+        _uiState.update { it.copy(showDeleteUserConfirmDialog = false, userToDelete = null) }
+    }
+
     // ... 他のメソッド (undo, save, confirmDiscardAndExitなども currentActiveUserId の代わりに _currentActiveUserIdFlow.value を参照するように変更)
     fun undo() {
         viewModelScope.launch {
@@ -257,7 +326,16 @@ class PracticeViewModel(
     fun cancelExit() { _uiState.update { it.copy(showExitConfirmDialog = false) } }
 
     fun onNameButtonClicked() { _uiState.update { it.copy(showUserDialog = true, userDialogErrorMessage = null) } }
-    fun dismissUserDialog() { _uiState.update { it.copy(showUserDialog = false, userDialogErrorMessage = null) } }
+    fun dismissUserDialog() {
+        _uiState.update {
+            it.copy(
+                showUserDialog = false,
+                userDialogErrorMessage = null,
+                showDeleteUserConfirmDialog = false,
+                userToDelete = null
+            )
+        }
+    }
 
     fun onEnvConfigButtonClicked() { _uiState.update { it.copy(showEnvConfigDialog = true) } }
     fun dismissEnvConfigDialog() { _uiState.update { it.copy(showEnvConfigDialog = false) } }

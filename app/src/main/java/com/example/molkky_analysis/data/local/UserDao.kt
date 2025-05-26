@@ -1,6 +1,7 @@
 package com.example.molkky_analysis.data.local
 
 import androidx.room.Dao
+import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
@@ -17,4 +18,7 @@ interface UserDao {
 
     @Query("SELECT * FROM user ORDER BY name ASC")
     fun getAllUsers(): Flow<List<User>>
+
+    @Delete
+    suspend fun deleteUser(user: User) // Added this line
 }

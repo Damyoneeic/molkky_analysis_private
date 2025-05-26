@@ -1,5 +1,6 @@
 package com.example.molkky_analysis.ui.practice
 
+import androidx.compose.material.icons.filled.Delete
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -85,7 +86,11 @@ fun PracticePage(
             onAddNewUser = { userName ->
                 viewModel.addNewUser(userName)
             },
-            errorMessage = uiState.userDialogErrorMessage
+            onDeleteUserClicked = { user ->
+                viewModel.requestDeleteUser(user)
+            },
+            errorMessage = uiState.userDialogErrorMessage,
+            currentUserId = uiState.currentUserId
         )
     }
 
@@ -133,6 +138,14 @@ fun PracticePage(
             distance = uiState.distanceToDelete ?: 0f, // Provide a default or handle null
             onConfirm = viewModel::confirmDeleteDistance,
             onCancel = viewModel::cancelDeleteDistance
+        )
+    }
+
+    if (uiState.showDeleteUserConfirmDialog) {
+        DeleteUserConfirmationDialog(
+            user = uiState.userToDelete,
+            onConfirm = viewModel::confirmDeleteUser,
+            onCancel = viewModel::cancelDeleteUser
         )
     }
 
@@ -294,6 +307,34 @@ fun PracticePage(
             }
         }
     }
+}
+
+@Composable
+fun DeleteUserConfirmationDialog(
+    user: User?,
+    onConfirm: () -> Unit,
+    onCancel: () -> Unit
+) {
+    if (user == null) return // 何も表示しない
+    AlertDialog(
+        onDismissRequest = onCancel,
+        title = { Text("Delete User") },
+        text = { Text("Are you sure you want to delete user \"${user.name}\"? All associated throw data will also be deleted. This action cannot be undone.") },
+        confirmButton = {
+            Button(
+                onClick = onConfirm,
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error) // 目立つようにエラーカラーに
+            ) {
+                Text("Delete User")
+            }
+        },
+        dismissButton = {
+            Button(onClick = onCancel) {
+                Text("Cancel")
+            }
+        },
+        properties = androidx.compose.ui.window.DialogProperties(dismissOnBackPress = true, dismissOnClickOutside = true)
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -552,7 +593,9 @@ fun UserManagementDialog(
     onDismiss: () -> Unit,
     onUserSelected: (User) -> Unit,
     onAddNewUser: (String) -> Unit,
-    errorMessage: String?
+    errorMessage: String?,
+    onDeleteUserClicked: (User) -> Unit, // このパラメータは定義に必要
+    currentUserId: Int                 // このパラメータは定義に必要
 ) {
     var newUserName by remember { mutableStateOf("") }
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -571,22 +614,43 @@ fun UserManagementDialog(
                             Row(
                                 Modifier
                                     .fillMaxWidth()
-                                    .clickable {
-                                        onUserSelected(user)
-                                        // onDismiss() // Optionally close dialog on selection
-                                    }
-                                    .padding(vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                                    // .clickable { onUserSelected(user) } // 行全体のクリックは削除アイコンと競合する可能性があるため、個別の要素に設定
+                                    .padding(vertical = 4.dp), // 少しパディングを調整
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween // アイコンを右端に配置
                             ) {
-                                RadioButton(
-                                    selected = (user.id == currentUser?.id),
-                                    onClick = {
-                                        onUserSelected(user)
-                                        // onDismiss() // Optionally close dialog on selection
-                                    }
-                                )
-                                Spacer(Modifier.width(8.dp))
-                                Text(user.name)
+                                // ラジオボタンとユーザー名を含むRow
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier
+                                        .weight(1f) // 利用可能なスペースを占める
+                                        .clickable { onUserSelected(user) } // この部分をクリックしてユーザー選択
+                                ) {
+                                    RadioButton(
+                                        selected = (user.id == currentUser?.id),
+                                        onClick = { onUserSelected(user) }
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                    // Textの Modifier.weight(1f, fill = false) は、Textが不必要にスペースを占めてIconButtonを押し出すのを防ぐ
+                                    Text(user.name, modifier = Modifier.weight(1f, fill = false))
+                                }
+
+                                // ↓↓↓ ゴミ箱アイコン（削除ボタン）の追加 ↓↓↓
+                                val canDeleteThisUser = user.id != currentUserId &&
+                                        availableUsers.size > 1 &&
+                                        !(user.id == 1 && user.name == "Player 1") // "Player 1" (ID=1) は削除不可とする例
+
+                                IconButton(
+                                    onClick = { onDeleteUserClicked(user) },
+                                    enabled = canDeleteThisUser
+                                ) {
+                                    Icon(
+                                        Icons.Filled.Delete, // androidx.compose.material.icons.filled.Delete を import してください
+                                        contentDescription = "Delete ${user.name}",
+                                        tint = if (canDeleteThisUser) MaterialTheme.colorScheme.error else Color.Gray
+                                    )
+                                }
+                                // ↑↑↑ ゴミ箱アイコン（削除ボタン）の追加 ↑↑↑
                             }
                         }
                     }
@@ -604,11 +668,10 @@ fun UserManagementDialog(
                     keyboardActions = KeyboardActions(onDone = {
                         if (newUserName.isNotBlank()) {
                             onAddNewUser(newUserName)
-                            // newUserName = "" // Cleared by ViewModel or if dialog stays open
                         }
                         keyboardController?.hide()
                     }),
-                    isError = errorMessage != null
+                    isError = errorMessage != null // エラーメッセージがあればisErrorをtrueに
                 )
                 errorMessage?.let {
                     Text(
@@ -635,7 +698,7 @@ fun UserManagementDialog(
                 }
             }
         },
-        confirmButton = {}, // Actions are inline or via dismiss
+        confirmButton = {}, // アクションはダイアログ内のボタンで行う
         dismissButton = {
             Button(onClick = onDismiss) {
                 Text("Close")

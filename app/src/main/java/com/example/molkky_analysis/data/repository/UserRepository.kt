@@ -16,4 +16,8 @@ class UserRepository(private val userDao: UserDao) : IUserRepository {
     override suspend fun insertUser(user: User): Long {
         return userDao.insertUser(user)
     }
+
+    override suspend fun deleteUser(user: User) { // Added this method
+        userDao.deleteUser(user)
+    }
 }

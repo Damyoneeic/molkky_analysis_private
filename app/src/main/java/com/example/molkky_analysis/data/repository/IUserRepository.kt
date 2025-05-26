@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.Flow
 interface IUserRepository {
     fun getAllUsers(): Flow<List<User>>
     suspend fun getUserById(userId: Int): User?
-    suspend fun insertUser(user: User): Long // 挿入されたユーザーのIDを返す
-    // 必要に応じて updateUser, deleteUser なども追加
+    suspend fun insertUser(user: User): Long
+    suspend fun deleteUser(user: User) // Added this line
+    // 必要に応じて updateUser なども追加
 }
