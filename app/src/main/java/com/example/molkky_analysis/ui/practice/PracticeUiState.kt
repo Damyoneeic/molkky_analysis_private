@@ -45,7 +45,13 @@ data class PracticeUiState(
 
     // ユーザー削除確認ダイアログ (これはグローバルなユーザー削除)
     val showDeleteUserConfirmDialog: Boolean = false,
-    val userToDelete: User? = null
+    val userToDelete: User? = null,
+
+    // ★★★ Session Deletion Dialog State ★★★
+    val showDeleteSessionConfirmDialog: Boolean = false,
+    val sessionToDeleteId: Int? = null
+    // ★★★ End of Session Deletion Dialog State ★★★
+
 ) {
     // 現在アクティブなセッションのSessionStateを簡単に取得するためのヘルパー
     val currentSessionState: SessionState? get() = sessions[currentActiveSessionId]

@@ -3,7 +3,11 @@ package com.example.molkky_analysis.ui.practice
 import androidx.compose.material.icons.filled.Delete // UserManagementDialogで使用
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import android.widget.Toast
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.border
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -32,6 +36,12 @@ import androidx.compose.material.icons.filled.ArrowDropDown // EnvConfigDialog�
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectTapGestures
 import android.util.Log
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.PressInteraction
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -68,6 +78,18 @@ fun PracticePage(
             onCancel = viewModel::cancelExit
         )
     }
+
+    if (uiState.showDeleteSessionConfirmDialog) {
+        val sessionNameToDelete = uiState.sessionToDeleteId?.let { id ->
+            uiState.sessions[id]?.currentUserName ?: "Session $id"
+        } ?: "Selected Session"
+        DeleteSessionConfirmDialog(
+            sessionName = sessionNameToDelete,
+            onConfirm = viewModel::confirmDeleteSession,
+            onCancel = viewModel::cancelDeleteSession
+        )
+    }
+
     if (uiState.showDeleteDistanceConfirmDialog) { // これは currentSession がないと distanceToDelete が設定されないはず
         DeleteDistanceConfirmationDialog(
             distance = uiState.distanceToDelete ?: 0f,
@@ -297,31 +319,93 @@ fun PracticePage(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class) // SessionTabsUIにも必要に応じて
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class) // Add ExperimentalFoundationApi
 @Composable
 fun SessionTabsUI(uiState: PracticeUiState, viewModel: PracticeViewModel) {
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+
     ScrollableTabRow(
         selectedTabIndex = uiState.activeSessionTabs.indexOf(uiState.currentActiveSessionId)
-            .coerceAtLeast(0).let { if (uiState.activeSessionTabs.isEmpty() && it == -1) 0 else it } // 空の場合の-1を0に
+            .coerceAtLeast(0).let { if (uiState.activeSessionTabs.isEmpty() && it == -1) 0 else it }
             .coerceAtMost(if (uiState.activeSessionTabs.isEmpty()) 0 else uiState.activeSessionTabs.size - 1)
     ) {
         uiState.activeSessionTabs.forEachIndexed { index, sessionId ->
             val sessionTabInfo = uiState.sessions[sessionId]
+            val interactionSource = remember { MutableInteractionSource() }
+            var pressJob by remember { mutableStateOf<Job?>(null) }
+            var isPressed by remember { mutableStateOf(false) } // 押下状態を追跡
+
+            LaunchedEffect(interactionSource) {
+                interactionSource.interactions.collect { interaction ->
+                    when (interaction) {
+                        is PressInteraction.Press -> {
+                            isPressed = true
+                            // 以前の長押しジョブがあればキャンセル
+                            pressJob?.cancel()
+                            // 新しい長押しジョブを開始
+                            pressJob = coroutineScope.launch {
+                                Log.d("SessionTabsUI_Interaction", "Press detected for session ID: $sessionId. Starting long press timer.")
+                                delay(500L) // 長押しとみなす時間 (ミリ秒)
+                                // このdelayが終わるまでに PressInteraction.Release や PressInteraction.Cancel が来なければ長押しとみなす
+                                if (isPressed) { // まだ押下中であれば長押しアクションを実行
+                                    Log.i("SessionTabsUI_Interaction", "Long press detected for session ID: $sessionId via InteractionSource")
+                                    if (uiState.sessions.size > 1) {
+                                        viewModel.requestDeleteSession(sessionId)
+                                    } else {
+                                        Log.d("SessionTabsUI_Interaction", "Long press on last session (InteractionSource), delete denied for $sessionId.")
+                                        Toast.makeText(context, "Cannot delete the last session", Toast.LENGTH_SHORT).show()
+                                    }
+                                    pressJob = null // 長押し処理後はジョブをクリア
+                                }
+                            }
+                        }
+                        is PressInteraction.Release -> {
+                            isPressed = false
+                            pressJob?.cancel() // 指が離れたら長押しタイマーをキャンセル
+                            pressJob = null
+                            Log.d("SessionTabsUI_Interaction", "Release detected for session ID: $sessionId. Cancelling long press timer.")
+                        }
+                        is PressInteraction.Cancel -> {
+                            isPressed = false
+                            pressJob?.cancel() // ジェスチャーがキャンセルされたら同様にキャンセル
+                            pressJob = null
+                            Log.d("SessionTabsUI_Interaction", "Cancel detected for session ID: $sessionId. Cancelling long press timer.")
+                        }
+                    }
+                }
+            }
+
             Tab(
                 selected = uiState.currentActiveSessionId == sessionId,
-                onClick = { viewModel.selectSession(sessionId) },
+                onClick = {
+                    Log.i("SessionTabsUI_TabEvent", "Tab's own onClick triggered for session ID: $sessionId")
+                    // 長押しがトリガーされた場合は、通常のクリック（選択）は行わないようにする
+                    // ただし、InteractionSourceの仕組み上、ReleaseがonClickより先に評価されるとは限らないため、
+                    // このonClickは常に呼ばれる可能性がある。
+                    // 長押しでダイアログ表示→ダイアログ外タップでRelease→onClick発動、という流れも考えられる。
+                    // より厳密には、長押し処理中にフラグを立ててonClickを抑制するなどの工夫が必要になる場合がある。
+                    // 今回はまず、長押し検知ができるかを優先する。
+                    if (pressJob == null || pressJob?.isCompleted == true || pressJob?.isCancelled == true) {
+                        // 長押し処理が実行されていない、または完了/キャンセルされていれば通常のクリック処理
+                        viewModel.selectSession(sessionId)
+                    } else {
+                        Log.d("SessionTabsUI_TabEvent", "onClick for $sessionId suppressed due to active pressJob.")
+                    }
+                },
+                interactionSource = interactionSource, // TabにInteractionSourceを渡す
                 text = { Text(sessionTabInfo?.currentUserName?.take(10) ?: "S ${index + 1}") }
-                // TODO: セッションクローズボタン (IconButton(onClick = { viewModel.closeSession(sessionId) }) { Icon(Icons.Default.Close, "") })
             )
         }
-        if (uiState.sessions.size < 5) { // PracticeViewModel.MAX_SESSIONS を参照すべきだが、直接定数を使用
+
+        // 「+」タブ
+        if (uiState.sessions.size < PracticeViewModel.MAX_SESSIONS) {
             Tab(
                 selected = false,
                 onClick = { viewModel.addSession() },
                 text = { Text("+") }
             )
         } else if (uiState.activeSessionTabs.isEmpty() && uiState.sessions.isEmpty()) {
-            // セッションが全くない場合（初期状態など）にも「＋」タブを表示してセッション作成を促す
             Tab(
                 selected = false,
                 onClick = { viewModel.addSession() },
@@ -348,6 +432,33 @@ fun DeleteUserConfirmationDialog(
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error) // 目立つようにエラーカラーに
             ) {
                 Text("Delete User")
+            }
+        },
+        dismissButton = {
+            Button(onClick = onCancel) {
+                Text("Cancel")
+            }
+        },
+        properties = androidx.compose.ui.window.DialogProperties(dismissOnBackPress = true, dismissOnClickOutside = true)
+    )
+}
+
+@Composable
+fun DeleteSessionConfirmDialog(
+    sessionName: String,
+    onConfirm: () -> Unit,
+    onCancel: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onCancel,
+        title = { Text("Delete Session") },
+        text = { Text("Are you sure you want to delete session \"$sessionName\"? All unsaved data in this session will be lost. This action cannot be undone.") },
+        confirmButton = {
+            Button(
+                onClick = onConfirm,
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+            ) {
+                Text("Delete Session")
             }
         },
         dismissButton = {

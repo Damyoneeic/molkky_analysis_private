@@ -148,7 +148,7 @@ class PracticeViewModel(
     }
 
     companion object {
-        private const val MAX_SESSIONS = 5
+        const val MAX_SESSIONS = 5 // Or internal const val MAX_SESSIONS = 5
         private const val DEFAULT_USER_ID = 1
         private const val DEFAULT_USER_NAME = "Player 1"
     }
@@ -234,6 +234,38 @@ class PracticeViewModel(
             }
         }
     }
+
+    // ★★★ Session Deletion Dialog Functions ★★★
+    fun requestDeleteSession(sessionId: Int) {
+        _uiState.update { currentState ->
+            if (currentState.sessions.size <= 1) {
+                // Optionally: show a toast or message, "Cannot delete the last session."
+                Log.w("SessionManagement", "Attempted to delete the last session ($sessionId). Operation denied.")
+                return@update currentState // Do not show dialog if it's the last session
+            }
+            if (currentState.sessions.containsKey(sessionId)) {
+                Log.d("SessionManagement", "Requesting delete confirmation for session $sessionId")
+                currentState.copy(showDeleteSessionConfirmDialog = true, sessionToDeleteId = sessionId)
+            } else {
+                currentState
+            }
+        }
+    }
+
+    fun confirmDeleteSession() {
+        val sessionIdToDelete = _uiState.value.sessionToDeleteId
+        if (sessionIdToDelete != null) {
+            Log.d("SessionManagement", "Confirming delete for session $sessionIdToDelete")
+            closeSession(sessionIdToDelete) // Re-use existing closeSession logic
+        }
+        _uiState.update { it.copy(showDeleteSessionConfirmDialog = false, sessionToDeleteId = null) }
+    }
+
+    fun cancelDeleteSession() {
+        Log.d("SessionManagement", "Session deletion cancelled.")
+        _uiState.update { it.copy(showDeleteSessionConfirmDialog = false, sessionToDeleteId = null) }
+    }
+    // ★★★ End of Session Deletion Dialog Functions ★★★
 
     private fun updateCurrentSession(updateBlock: (SessionState) -> SessionState) {
         _uiState.update { currentState ->
