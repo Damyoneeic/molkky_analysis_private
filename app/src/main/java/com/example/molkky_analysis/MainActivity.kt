@@ -29,6 +29,7 @@ import com.example.molkky_analysis.data.repository.UserRepository // UserReposit
 import com.example.molkky_analysis.data.repository.IUserRepository
 import com.example.molkky_analysis.ui.data_display.DataViewModel
 import com.example.molkky_analysis.ui.analysis.AnalysisViewModel
+import androidx.compose.ui.unit.sp
 
 class MainActivity : ComponentActivity() {
     @SuppressLint("SourceLockedOrientationActivity")
@@ -173,19 +174,40 @@ fun Page1ScreenLayout(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Text(
-            text = "Welcome to ${AppDestinations.PAGE1.label}",
-            style = MaterialTheme.typography.headlineMedium
-        )
-        Spacer(Modifier.height(32.dp))
-        // 各ページへのナビゲーションボタン (テキストのみ)
-        Button(onClick = { onNavigateTo(AppDestinations.PRACTICE) }) { Text(AppDestinations.PRACTICE.label) }
-        Spacer(Modifier.height(8.dp))
-        Button(onClick = { onNavigateTo(AppDestinations.ANALYSIS) }) { Text(AppDestinations.ANALYSIS.label) }
-        Spacer(Modifier.height(8.dp))
-        Button(onClick = { onNavigateTo(AppDestinations.DATA) }) { Text(AppDestinations.DATA.label) }
-        Spacer(Modifier.height(8.dp))
-        Button(onClick = { onNavigateTo(AppDestinations.SETTINGS) }) { Text(AppDestinations.SETTINGS.label) }
+        // 「Welcome to Page 1」のテキストと関連するSpacerは削除済み
+
+        val buttonModifier = Modifier
+            .width(200.dp) // ボタンの幅を指定 (元の幅に応じて調整してください)
+            .height(80.dp)  // ボタンの高さを指定 (元の高さに応じて調整してください)
+        val buttonSpacerHeight = 16.dp // ボタン間のスペースを少し広めに調整 (お好みで)
+
+        Button(
+            onClick = { onNavigateTo(AppDestinations.PRACTICE) },
+            modifier = buttonModifier
+        ) {
+            Text(AppDestinations.PRACTICE.label, fontSize = 20.sp)
+        }
+        Spacer(Modifier.height(buttonSpacerHeight))
+        Button(
+            onClick = { onNavigateTo(AppDestinations.ANALYSIS) },
+            modifier = buttonModifier
+        ) {
+            Text(AppDestinations.ANALYSIS.label, fontSize = 20.sp)
+        }
+        Spacer(Modifier.height(buttonSpacerHeight))
+        Button(
+            onClick = { onNavigateTo(AppDestinations.DATA) },
+            modifier = buttonModifier
+        ) {
+            Text(AppDestinations.DATA.label, fontSize = 20.sp)
+        }
+        Spacer(Modifier.height(buttonSpacerHeight))
+        Button(
+            onClick = { onNavigateTo(AppDestinations.SETTINGS) },
+            modifier = buttonModifier
+        ) {
+            Text(AppDestinations.SETTINGS.label, fontSize = 20.sp)
+        }
     }
 }
 

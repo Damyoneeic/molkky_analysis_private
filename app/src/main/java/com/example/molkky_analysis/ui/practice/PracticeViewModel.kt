@@ -40,8 +40,8 @@ class PracticeViewModel(
     private val _uiState = MutableStateFlow(
         PracticeUiState(
             currentUserId = initialUserId,
-            activeDistance = 3.0f,
-            configuredDistances = listOf(3.0f, 3.5f, 4.0f)
+            activeDistance = 4.0f,
+            configuredDistances = listOf(4.0f)
         )
     )
 

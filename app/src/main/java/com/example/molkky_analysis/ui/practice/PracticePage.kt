@@ -146,13 +146,13 @@ fun PracticePage(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Button(onClick = viewModel::onNameButtonClicked) {
-                    SimpleRectanglePlaceholder()
-                    Spacer(Modifier.width(8.dp))
+//                    SimpleRectanglePlaceholder()
+//                    Spacer(Modifier.width(8.dp))
                     Text(uiState.currentUserName)
                 }
                 Button(onClick = viewModel::onEnvConfigButtonClicked) {
-                    SimpleRectanglePlaceholder()
-                    Spacer(Modifier.width(8.dp))
+//                    SimpleRectanglePlaceholder()
+//                    Spacer(Modifier.width(8.dp))
                     Text("Env Config")
                 }
             }
@@ -194,7 +194,7 @@ fun PracticePage(
                             viewModel.addThrow(true)
                         }
                     },
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).defaultMinSize(minHeight = 72.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = if (isButtonActuallyEnabled) Color(0xFFADDDCE) else MaterialTheme.colorScheme.surfaceVariant,
                         contentColor = if (isButtonActuallyEnabled) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
@@ -208,7 +208,7 @@ fun PracticePage(
                             viewModel.addThrow(false)
                         }
                     },
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).defaultMinSize(minHeight = 72.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = if (isButtonActuallyEnabled) Color(0xFFFFC0CB) else MaterialTheme.colorScheme.surfaceVariant,
                         contentColor = if (isButtonActuallyEnabled) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
@@ -248,8 +248,8 @@ fun PracticePage(
                     onClick = viewModel::requestAddDistance,
                     modifier = Modifier.weight(1f)
                 ) {
-                    SimpleRectanglePlaceholder()
-                    Spacer(Modifier.width(4.dp))
+//                    SimpleRectanglePlaceholder()
+//                    Spacer(Modifier.width(4.dp))
                     Text("Add Distance")
                 }
                 Button(
@@ -257,8 +257,8 @@ fun PracticePage(
                     enabled = uiState.canUndo,
                     modifier = Modifier.weight(1f)
                 ) {
-                    SimpleRectanglePlaceholder()
-                    Spacer(Modifier.width(4.dp))
+//                    SimpleRectanglePlaceholder()
+//                    Spacer(Modifier.width(4.dp))
                     Text("Undo")
                 }
             }
@@ -450,11 +450,11 @@ fun AngleButton(label: String, isSelected: Boolean, onClick: () -> Unit) {
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             // Placeholder for an icon or visual representation of the angle
-            SimpleRectanglePlaceholder(
-                modifier = Modifier.size(width = 40.dp, height = 20.dp), // Example size
-                color = if (isSelected) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-            )
-            Spacer(Modifier.height(4.dp))
+//            SimpleRectanglePlaceholder(
+//                modifier = Modifier.size(width = 40.dp, height = 20.dp), // Example size
+//                color = if (isSelected) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+//            )
+//            Spacer(Modifier.height(4.dp))
             Text(label, fontSize = 10.sp) // Display the label text
         }
     }
