@@ -27,6 +27,7 @@ import com.example.molkky_analysis.ui.settings.SettingsScreenLayout // こちら
 import com.example.molkky_analysis.ui.theme.Molkky_analysisTheme
 import com.example.molkky_analysis.data.repository.UserRepository // UserRepository をインポート
 import com.example.molkky_analysis.data.repository.IUserRepository
+import com.example.molkky_analysis.ui.data_display.DataViewModel
 
 class MainActivity : ComponentActivity() {
     @SuppressLint("SourceLockedOrientationActivity")
@@ -65,6 +66,9 @@ fun Molkky_analysisApp() {
     val practiceViewModelFactory = remember {
         { userId: Int -> PracticeViewModel(throwRepository, userRepository, userId) }
     }
+    val dataViewModelFactory = remember {
+        { DataViewModel(throwRepository, userRepository) }
+    }
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -85,6 +89,7 @@ fun Molkky_analysisApp() {
             currentDestination = currentDestination,
             onNavigateTo = { destination -> currentDestination = destination },
             practiceViewModelFactory = practiceViewModelFactory,
+            dataViewModelFactory = dataViewModelFactory,
             modifier = Modifier
                 .padding(innerPadding)
                 .fillMaxSize()
@@ -97,6 +102,7 @@ fun AppScreen(
     currentDestination: AppDestinations,
     onNavigateTo: (AppDestinations) -> Unit,
     practiceViewModelFactory: (Int) -> PracticeViewModel,
+    dataViewModelFactory: () -> DataViewModel,
     modifier: Modifier = Modifier
 ) {
     Box(
@@ -120,11 +126,15 @@ fun AppScreen(
                 onReturnToHome = { onNavigateTo(AppDestinations.PAGE1) },
                 modifier = Modifier.fillMaxSize()
             )
-            AppDestinations.DATA -> DataScreen(
-                pageLabel = currentDestination.label,
-                onReturnToHome = { onNavigateTo(AppDestinations.PAGE1) },
-                modifier = Modifier.fillMaxSize()
-            )
+            AppDestinations.DATA -> {
+                val dataViewModel = remember { dataViewModelFactory() } // ★ ViewModel取得
+                DataScreen( // DataScreen に ViewModel を渡すように変更
+                    viewModel = dataViewModel,
+                    // pageLabel は不要になるか、ViewModelから取得するようにする
+                    onReturnToHome = { onNavigateTo(AppDestinations.PAGE1) },
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
             AppDestinations.SETTINGS -> SettingsScreenLayout(
                 pageLabel = currentDestination.label,
                 onReturnToPage1 = { onNavigateTo(AppDestinations.PAGE1) },

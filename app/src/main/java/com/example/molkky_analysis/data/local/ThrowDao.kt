@@ -13,10 +13,10 @@ import kotlinx.coroutines.flow.Flow
 interface ThrowDao {
     // --- Draft Operations ---
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertDraft(draft: ThrowDraft) // [cite: 12]
+    suspend fun insertDraft(draft: ThrowDraft)
 
     @Query("DELETE FROM throw_draft WHERE id = (SELECT MAX(id) FROM throw_draft WHERE user_id = :userId)")
-    suspend fun deleteLastDraftForUser(userId: Int) // [cite: 12] 仕様書では引数なしだが、ユーザーIDで絞ることを推奨
+    suspend fun deleteLastDraftForUser(userId: Int)
 
     @Query("SELECT * FROM throw_draft WHERE user_id = :userId ORDER BY timestamp DESC")
     fun getDraftsForUser(userId: Int): Flow<List<ThrowDraft>>
@@ -29,18 +29,36 @@ interface ThrowDao {
 
 
     // --- Final Record Operations ---
-    @Insert(onConflict = OnConflictStrategy.REPLACE) //
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertThrowRecords(records: List<ThrowRecord>)
 
+    // ★ 新しいメソッド: 全てのThrowRecordをタイムスタンプの降順で取得
+    @Query("SELECT * FROM throw_record ORDER BY timestamp DESC")
+    fun getAllThrowRecords(): Flow<List<ThrowRecord>>
 
-    // --- Transaction for committing drafts (仕様書 5.3 参照) ---
-    @Transaction // [cite: 12]
-    suspend fun commitDraftsToFinalForUser(userId: Int) { // [cite: 12]
+    // ★ 新しいメソッド: 特定のユーザーのThrowRecordをタイムスタンプの降順で取得
+    @Query("SELECT * FROM throw_record WHERE user_id = :userId ORDER BY timestamp DESC")
+    fun getThrowRecordsForUser(userId: Int): Flow<List<ThrowRecord>>
+
+    // ★ 新しいメソッド: IDで特定のThrowRecordを取得 (編集・削除用)
+    @Query("SELECT * FROM throw_record WHERE id = :recordId")
+    suspend fun getThrowRecordById(recordId: Int): ThrowRecord?
+
+    // ★ 新しいメソッド: ThrowRecordを更新 (編集用)
+    @androidx.room.Update
+    suspend fun updateThrowRecord(record: ThrowRecord)
+
+    // ★ 新しいメソッド: ThrowRecordを削除 (削除用)
+    @androidx.room.Delete
+    suspend fun deleteThrowRecord(record: ThrowRecord)
+
+    // --- Transaction for committing drafts ---
+    @Transaction
+    suspend fun commitDraftsToFinalForUser(userId: Int) {
         val draftsToCommit = getDraftsForUserOnce(userId)
         if (draftsToCommit.isNotEmpty()) {
             val recordsToInsert = draftsToCommit.map { draft ->
-                ThrowRecord( //
-                    // id は autoGenerate のため不要
+                ThrowRecord(
                     userId = draft.userId,
                     distance = draft.distance,
                     angle = draft.angle,
@@ -53,8 +71,8 @@ interface ThrowDao {
                     timestamp = draft.timestamp
                 )
             }
-            insertThrowRecords(recordsToInsert) //
-            clearAllDraftsForUser(userId) // [cite: 15]
+            insertThrowRecords(recordsToInsert)
+            clearAllDraftsForUser(userId)
         }
     }
 

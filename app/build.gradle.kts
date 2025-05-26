@@ -65,4 +65,8 @@ dependencies {
     // For Kotlin projects, use KSP instead of annotationProcessor
     ksp("androidx.room:room-compiler:$roomVersion")
     implementation("androidx.room:room-ktx:$roomVersion") // Kotlin Extensions
+    val koinVersion = "3.5.6" // (使用しているKoinのバージョンに合わせてください)
+    implementation("io.insert-koin:koin-android:$koinVersion")
+    // Koin for Jetpack Compose (オプション、ViewModelの取得に便利)
+    implementation("io.insert-koin:koin-androidx-compose:$koinVersion")
 }
