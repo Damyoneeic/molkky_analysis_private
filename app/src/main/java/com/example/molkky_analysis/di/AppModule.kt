@@ -15,6 +15,7 @@ import com.example.molkky_analysis.ui.practice.PracticeViewModel
 import org.koin.android.ext.koin.androidContext
 import org.koin.androidx.viewmodel.dsl.viewModel
 import org.koin.dsl.module
+import com.example.molkky_analysis.ui.analysis.AnalysisViewModel
 
 val appModule = module {
     // Database
@@ -34,4 +35,5 @@ val appModule = module {
     // ViewModels
     viewModel { (userId: Int) -> PracticeViewModel(get(), get(), userId) }
     viewModel { DataViewModel(get(), get()) }
+    viewModel { AnalysisViewModel(get(), get()) }
 }

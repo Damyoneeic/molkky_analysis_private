@@ -28,6 +28,7 @@ import com.example.molkky_analysis.ui.theme.Molkky_analysisTheme
 import com.example.molkky_analysis.data.repository.UserRepository // UserRepository をインポート
 import com.example.molkky_analysis.data.repository.IUserRepository
 import com.example.molkky_analysis.ui.data_display.DataViewModel
+import com.example.molkky_analysis.ui.analysis.AnalysisViewModel
 
 class MainActivity : ComponentActivity() {
     @SuppressLint("SourceLockedOrientationActivity")
@@ -69,6 +70,9 @@ fun Molkky_analysisApp() {
     val dataViewModelFactory = remember {
         { DataViewModel(throwRepository, userRepository) }
     }
+    val analysisViewModelFactory = remember {
+        { AnalysisViewModel(throwRepository, userRepository) }
+    }
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -90,6 +94,7 @@ fun Molkky_analysisApp() {
             onNavigateTo = { destination -> currentDestination = destination },
             practiceViewModelFactory = practiceViewModelFactory,
             dataViewModelFactory = dataViewModelFactory,
+            analysisViewModelFactory = analysisViewModelFactory,
             modifier = Modifier
                 .padding(innerPadding)
                 .fillMaxSize()
@@ -103,6 +108,7 @@ fun AppScreen(
     onNavigateTo: (AppDestinations) -> Unit,
     practiceViewModelFactory: (Int) -> PracticeViewModel,
     dataViewModelFactory: () -> DataViewModel,
+    analysisViewModelFactory: () -> AnalysisViewModel,
     modifier: Modifier = Modifier
 ) {
     Box(
@@ -121,11 +127,15 @@ fun AppScreen(
                     onReturnToHome = { onNavigateTo(AppDestinations.PAGE1) }
                 )
             }
-            AppDestinations.ANALYSIS -> AnalysisScreen(
-                pageLabel = currentDestination.label,
-                onReturnToHome = { onNavigateTo(AppDestinations.PAGE1) },
-                modifier = Modifier.fillMaxSize()
-            )
+            AppDestinations.ANALYSIS -> {
+                val analysisViewModel = remember { analysisViewModelFactory() } // ★ ViewModel取得
+                AnalysisScreen( // AnalysisScreen に ViewModel を渡す
+                    viewModel = analysisViewModel,
+                    // pageLabel は不要になるか、ViewModelから取得
+                    onReturnToHome = { onNavigateTo(AppDestinations.PAGE1) },
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
             AppDestinations.DATA -> {
                 val dataViewModel = remember { dataViewModelFactory() } // ★ ViewModel取得
                 DataScreen( // DataScreen に ViewModel を渡すように変更
@@ -140,6 +150,15 @@ fun AppScreen(
                 onReturnToPage1 = { onNavigateTo(AppDestinations.PAGE1) },
                 modifier = Modifier.fillMaxSize()
             )
+            AppDestinations.ANALYSIS -> {
+                val analysisViewModel = remember { analysisViewModelFactory() } // ★ ViewModel取得
+                AnalysisScreen( // AnalysisScreen に ViewModel を渡す
+                    viewModel = analysisViewModel,
+                    // pageLabel は不要になるか、ViewModelから取得
+                    onReturnToHome = { onNavigateTo(AppDestinations.PAGE1) },
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
         }
     }
 }
