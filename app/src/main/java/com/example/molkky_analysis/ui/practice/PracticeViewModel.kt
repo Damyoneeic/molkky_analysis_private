@@ -234,6 +234,18 @@ class PracticeViewModel(
         _uiState.update { it.copy(showDeleteUserConfirmDialog = true, userToDelete = user) }
     }
 
+    fun resetEnvironmentConfiguration() {
+        _uiState.update {
+            it.copy(
+                sessionWeather = null,
+                sessionHumidity = null,
+                sessionTemperature = null,
+                sessionSoil = null,
+                sessionMolkkyWeight = null // モルック棒の重さもリセット対象に含める場合
+            )
+        }
+    }
+
     fun confirmDeleteUser() {
         viewModelScope.launch {
             _uiState.value.userToDelete?.let { user ->

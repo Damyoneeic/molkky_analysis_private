@@ -126,6 +126,7 @@ fun PracticePage(
             initialHumidity = uiState.sessionHumidity,
             initialSoil = uiState.sessionSoil, // Ground maps to soil
             onDismiss = viewModel::dismissEnvConfigDialog,
+            onReset = viewModel::resetEnvironmentConfiguration, // ★ Resetコールバックを追加
             onApply = { weather, temperature, humidity, soil ->
                 viewModel.updateSessionWeather(weather)
                 viewModel.updateSessionTemperature(temperature)
@@ -358,6 +359,7 @@ fun EnvConfigDialog(
     initialHumidity: Float?,
     initialSoil: String?, // Represents Ground
     onDismiss: () -> Unit,
+    onReset: () -> Unit, // ★ パラメータ追加
     onApply: (weather: String?, temperature: Float?, humidity: Float?, soil: String?) -> Unit
 ) {
     var weather by remember { mutableStateOf(initialWeather ?: "") }
@@ -370,6 +372,29 @@ fun EnvConfigDialog(
 
     val groundOptions = listOf("Soil", "Hard Court", "Lawn", "Artificial Grass")
     var groundExpanded by remember { mutableStateOf(false) }
+
+    // リセット時にダイアログ内のローカルステートもクリアするためのLaunchedEffect
+    // initialXxx のいずれかがnullに変わったら（ViewModelがリセットされたら）ローカルステートも追従
+    // ただし、一部のみnullの場合はクリアしないように調整が必要なら、より複雑なロジックになる
+    LaunchedEffect(initialWeather, initialTemperature, initialHumidity, initialSoil) {
+        // ViewModel側の値が全てnullになった場合に限り、ダイアログ内の表示もクリアする
+        // (ユーザーが意図的に一部のフィールドのみクリアした場合との区別のため)
+        // もしくは、onResetが呼ばれたことを示す別のフラグをViewModelから渡すなどの方法も考えられる
+        if (initialWeather == null && initialTemperature == null && initialHumidity == null && initialSoil == null) {
+            if (weather.isNotEmpty() || temperatureText.isNotEmpty() || humidityText.isNotEmpty() || ground.isNotEmpty()) {
+                weather = ""
+                temperatureText = ""
+                humidityText = ""
+                ground = ""
+            }
+        } else { // ViewModel側の値が更新されたら、ローカルステートもそれに追従
+            if (initialWeather != weather) weather = initialWeather ?: ""
+            if (initialTemperature?.toString() != temperatureText) temperatureText = initialTemperature?.toString() ?: ""
+            if (initialHumidity?.toString() != humidityText) humidityText = initialHumidity?.toString() ?: ""
+            if (initialSoil != ground) ground = initialSoil ?: ""
+        }
+    }
+
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -462,7 +487,14 @@ fun EnvConfigDialog(
             }) { Text("Apply") }
         },
         dismissButton = {
-            Button(onClick = onDismiss) { Text("Cancel") }
+            Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) { // 右寄せにする
+                Button(onClick = {
+                    onReset()
+                    // 下のLaunchedEffectがViewModelの変更を検知してローカルステートをクリアするはず
+                }) { Text("Reset") }
+                Spacer(Modifier.width(8.dp))
+                Button(onClick = onDismiss) { Text("Cancel") }
+            }
         }
     )
 }
