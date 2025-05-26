@@ -290,9 +290,9 @@ fun PracticePage(
                 onDismiss = viewModel::dismissUserDialog,
                 onUserSelected = { user -> viewModel.switchUserForCurrentSession(user.id) },
                 onAddNewUser = { userName -> viewModel.addNewUserAndSwitch(userName) },
-                onDeleteUserClicked = { user -> viewModel.requestDeleteUser(user) }, // これはグローバルだが、ダイアログのトリガーはここ
+                onDeleteUserClicked = { user -> viewModel.requestDeleteUser(user) },
                 errorMessage = uiState.userDialogErrorMessage,
-                currentUserId = currentSession.currentUserId // 削除ボタンの有効化判定に使用
+                currentUserId = currentSession.currentUserId
             )
         }
         if (uiState.showEnvConfigDialog) {
@@ -301,13 +301,15 @@ fun PracticePage(
                 initialTemperature = currentSession.sessionTemperature,
                 initialHumidity = currentSession.sessionHumidity,
                 initialSoil = currentSession.sessionSoil,
+                initialMolkkyWeight = currentSession.sessionMolkkyWeight, // Pass Molkky Weight
                 onDismiss = viewModel::dismissEnvConfigDialog,
                 onReset = viewModel::resetEnvironmentConfiguration,
-                onApply = { weather, temperature, humidity, soil ->
+                onApply = { weather, temperature, humidity, soil, molkkyWeight -> // Add molkkyWeight to lambda
                     viewModel.updateSessionWeather(weather)
                     viewModel.updateSessionTemperature(temperature)
                     viewModel.updateSessionHumidity(humidity)
                     viewModel.updateSessionSoil(soil)
+                    viewModel.updateSessionMolkkyWeight(molkkyWeight) // Call ViewModel to update
                     viewModel.dismissEnvConfigDialog()
                 }
             )
@@ -476,15 +478,17 @@ fun EnvConfigDialog(
     initialWeather: String?,
     initialTemperature: Float?,
     initialHumidity: Float?,
-    initialSoil: String?, // Represents Ground
+    initialSoil: String?,
+    initialMolkkyWeight: Float?, // Added parameter
     onDismiss: () -> Unit,
-    onReset: () -> Unit, // ★ パラメータ追加
-    onApply: (weather: String?, temperature: Float?, humidity: Float?, soil: String?) -> Unit
+    onReset: () -> Unit,
+    onApply: (weather: String?, temperature: Float?, humidity: Float?, soil: String?, molkkyWeight: Float?) -> Unit // Added parameter to lambda
 ) {
     var weather by remember { mutableStateOf(initialWeather ?: "") }
     var temperatureText by remember { mutableStateOf(initialTemperature?.toString() ?: "") }
     var humidityText by remember { mutableStateOf(initialHumidity?.toString() ?: "") }
-    var ground by remember { mutableStateOf(initialSoil ?: "") } // Ground selection stored in 'soil'
+    var ground by remember { mutableStateOf(initialSoil ?: "") }
+    var molkkyWeightText by remember { mutableStateOf(initialMolkkyWeight?.toString() ?: "") } // Added state for Molkky Weight
 
     val weatherOptions = listOf("Sunny", "Cloudy", "Snowy", "Rainy", "Indoors")
     var weatherExpanded by remember { mutableStateOf(false) }
@@ -492,25 +496,21 @@ fun EnvConfigDialog(
     val groundOptions = listOf("Soil", "Hard Court", "Lawn", "Artificial Grass")
     var groundExpanded by remember { mutableStateOf(false) }
 
-    // リセット時にダイアログ内のローカルステートもクリアするためのLaunchedEffect
-    // initialXxx のいずれかがnullに変わったら（ViewModelがリセットされたら）ローカルステートも追従
-    // ただし、一部のみnullの場合はクリアしないように調整が必要なら、より複雑なロジックになる
-    LaunchedEffect(initialWeather, initialTemperature, initialHumidity, initialSoil) {
-        // ViewModel側の値が全てnullになった場合に限り、ダイアログ内の表示もクリアする
-        // (ユーザーが意図的に一部のフィールドのみクリアした場合との区別のため)
-        // もしくは、onResetが呼ばれたことを示す別のフラグをViewModelから渡すなどの方法も考えられる
-        if (initialWeather == null && initialTemperature == null && initialHumidity == null && initialSoil == null) {
-            if (weather.isNotEmpty() || temperatureText.isNotEmpty() || humidityText.isNotEmpty() || ground.isNotEmpty()) {
+    LaunchedEffect(initialWeather, initialTemperature, initialHumidity, initialSoil, initialMolkkyWeight) { // Added initialMolkkyWeight
+        if (initialWeather == null && initialTemperature == null && initialHumidity == null && initialSoil == null && initialMolkkyWeight == null) {
+            if (weather.isNotEmpty() || temperatureText.isNotEmpty() || humidityText.isNotEmpty() || ground.isNotEmpty() || molkkyWeightText.isNotEmpty()) {
                 weather = ""
                 temperatureText = ""
                 humidityText = ""
                 ground = ""
+                molkkyWeightText = "" // Clear molkky weight text
             }
-        } else { // ViewModel側の値が更新されたら、ローカルステートもそれに追従
+        } else {
             if (initialWeather != weather) weather = initialWeather ?: ""
             if (initialTemperature?.toString() != temperatureText) temperatureText = initialTemperature?.toString() ?: ""
             if (initialHumidity?.toString() != humidityText) humidityText = initialHumidity?.toString() ?: ""
             if (initialSoil != ground) ground = initialSoil ?: ""
+            if (initialMolkkyWeight?.toString() != molkkyWeightText) molkkyWeightText = initialMolkkyWeight?.toString() ?: "" // Update molkky weight text
         }
     }
 
@@ -520,11 +520,11 @@ fun EnvConfigDialog(
         title = { Text("Environment Configuration") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                // Weather Dropdown
+                // Weather Dropdown (same as before)
                 Box {
                     OutlinedTextField(
                         value = weather,
-                        onValueChange = { }, // Not directly changed by typing
+                        onValueChange = { },
                         label = { Text("Weather") },
                         readOnly = true,
                         trailingIcon = { Icon(Icons.Filled.ArrowDropDown, "Select Weather", Modifier.clickable { weatherExpanded = true }) },
@@ -547,7 +547,6 @@ fun EnvConfigDialog(
                     }
                 }
 
-                // Temperature TextField
                 OutlinedTextField(
                     value = temperatureText,
                     onValueChange = { temperatureText = it },
@@ -557,7 +556,6 @@ fun EnvConfigDialog(
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                // Humidity TextField
                 OutlinedTextField(
                     value = humidityText,
                     onValueChange = { humidityText = it },
@@ -567,11 +565,11 @@ fun EnvConfigDialog(
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                // Ground (Soil) Dropdown
+                // Ground (Soil) Dropdown (same as before)
                 Box {
                     OutlinedTextField(
                         value = ground,
-                        onValueChange = { }, // Not directly changed by typing
+                        onValueChange = { },
                         label = { Text("Ground") },
                         readOnly = true,
                         trailingIcon = { Icon(Icons.Filled.ArrowDropDown, "Select Ground", Modifier.clickable { groundExpanded = true }) },
@@ -593,6 +591,16 @@ fun EnvConfigDialog(
                         }
                     }
                 }
+
+                // Molkky Weight TextField
+                OutlinedTextField(
+                    value = molkkyWeightText,
+                    onValueChange = { molkkyWeightText = it },
+                    label = { Text("Molkky Weight (g)") }, // Label for Molkky weight
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
         },
         confirmButton = {
@@ -601,15 +609,15 @@ fun EnvConfigDialog(
                     weather.ifEmpty { null },
                     temperatureText.toFloatOrNull(),
                     humidityText.toFloatOrNull(),
-                    ground.ifEmpty { null } // This is for the 'soil' field
+                    ground.ifEmpty { null },
+                    molkkyWeightText.toFloatOrNull() // Pass molkky weight
                 )
             }) { Text("Apply") }
         },
         dismissButton = {
-            Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) { // 右寄せにする
+            Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
                 Button(onClick = {
                     onReset()
-                    // 下のLaunchedEffectがViewModelの変更を検知してローカルステートをクリアするはず
                 }) { Text("Reset") }
                 Spacer(Modifier.width(8.dp))
                 Button(onClick = onDismiss) { Text("Cancel") }
