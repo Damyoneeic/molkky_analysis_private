@@ -89,12 +89,14 @@ class PracticeViewModel(
     }
 
     private fun performUserSwitch(userId: Int) {
-        _currentActiveUserIdFlow.value = userId // ★ これで draftsFlow と practiceSessionState が再評価される
+        _currentActiveUserIdFlow.value = userId
         _uiState.update {
             it.copy(
-                currentUserId = userId, // _uiState も更新 (UIの即時反映や他のロジックのため)
-                configuredDistances = listOf(3.0f, 3.5f, 4.0f),
-                activeDistance = 3.0f,
+                currentUserId = userId,
+                // 修正: configuredDistances を PracticeUiState の初期値に合わせる
+                configuredDistances = listOf(4.0f),
+                // 修正: activeDistance を PracticeUiState の初期値に合わせる
+                activeDistance = 4.0f,
                 sessionWeather = null,
                 sessionHumidity = null,
                 sessionTemperature = null,
@@ -104,8 +106,6 @@ class PracticeViewModel(
                 pendingUserSwitchId = null
             )
         }
-        // refreshDraftsFlow() は不要になる
-        // ユーザー名も practiceSessionState の combine で更新されるので、ここでの個別設定は不要になるかも
     }
 
 
