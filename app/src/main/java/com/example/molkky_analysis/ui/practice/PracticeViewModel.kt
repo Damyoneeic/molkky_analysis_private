@@ -3,15 +3,18 @@ package com.example.molkky_analysis.ui.practice
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.molkky_analysis.data.model.ThrowDraft
-import com.example.molkky_analysis.data.model.User // Userモデルをインポート
+import com.example.molkky_analysis.data.model.User
 import com.example.molkky_analysis.data.repository.IThrowRepository
-import com.example.molkky_analysis.data.repository.IUserRepository // IUserRepositoryをインポート
+import com.example.molkky_analysis.data.repository.IUserRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged // ★ 追加
+import kotlinx.coroutines.flow.flatMapLatest // ★ 追加
 import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.map // ★ 追加 (distinctUntilChangedBy と併用する場合など)
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -19,16 +22,28 @@ import java.util.Date
 
 class PracticeViewModel(
     private val throwRepository: IThrowRepository,
-    private val userRepository: IUserRepository, // ★ UserRepository を注入
-    private var currentActiveUserId: Int // ★ ViewModel初期化時のユーザーID、変更可能にする
+    private val userRepository: IUserRepository,
+    initialUserId: Int // ★ 初期ユーザーIDを引数名変更
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(PracticeUiState(currentUserId = currentActiveUserId))
+    // currentActiveUserId を MutableStateFlow で管理
+    private val _currentActiveUserIdFlow = MutableStateFlow(initialUserId) // ★
 
-    // 現在のユーザーのドラフトのみを監視するように変更
-    private var draftsFlow: StateFlow<List<ThrowDraft>> =
-        throwRepository.getDrafts(currentActiveUserId)
-            .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+    // _currentActiveUserIdFlow の変更に応じて draftsFlow を動的に切り替える
+    private val draftsFlow: StateFlow<List<ThrowDraft>> = _currentActiveUserIdFlow
+        .flatMapLatest { userId -> // ★ flatMapLatest を使用
+            android.util.Log.d("ViewModelFlows", "draftsFlow subscribing to new userId: $userId")
+            throwRepository.getDrafts(userId)
+        }
+        .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
+    private val _uiState = MutableStateFlow(
+        PracticeUiState(
+            currentUserId = initialUserId,
+            activeDistance = 3.0f,
+            configuredDistances = listOf(3.0f, 3.5f, 4.0f)
+        )
+    )
 
     val availableUsers: StateFlow<List<User>> = userRepository.getAllUsers()
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
@@ -37,9 +52,11 @@ class PracticeViewModel(
         combine(
             draftsFlow,
             _uiState,
-            availableUsers // 利用可能なユーザーリストもcombineに含める
-        ) { drafts, currentLocalState, users ->
-            val currentUser = users.find { it.id == currentLocalState.currentUserId }
+            availableUsers,
+            _currentActiveUserIdFlow // ★ アクティブなユーザーIDのFlowもcombineに含める
+        ) { drafts, currentLocalState, users, activeUserId ->
+            android.util.Log.d("ViewModelFlows", "Combine invoked. currentActiveUserId from Flow: $activeUserId, Drafts count: ${drafts.size}. currentLocalState.activeDistance: ${currentLocalState.activeDistance}")
+            val currentUser = users.find { it.id == activeUserId } // ★ combineのactiveUserIdを使用
             val grouped = drafts.groupBy { it.distance }
                 .mapValues { entry ->
                     entry.value.map { draft ->
@@ -49,59 +66,36 @@ class PracticeViewModel(
             val allDisplayDistances = currentLocalState.configuredDistances.distinct().sorted()
 
             currentLocalState.copy(
-                currentUserName = currentUser?.name ?: "Loading...",
+                currentUserId = activeUserId, // ★ combineのactiveUserIdを使用
+                currentUserName = currentUser?.name ?: "Player $activeUserId",
                 throwsGroupedByDistance = grouped,
                 canUndo = drafts.isNotEmpty(),
                 isDirty = drafts.isNotEmpty(),
                 configuredDistances = allDisplayDistances,
-                availableUsers = users // UIStateにもユーザーリストを渡す
+                availableUsers = users
             )
         }.stateIn(
             viewModelScope,
             SharingStarted.WhileSubscribed(5000),
-            _uiState.value.copy(currentUserId = currentActiveUserId) // 初期値
+            _uiState.value.copy(currentUserId = initialUserId) // 初期値
         )
 
     init {
-        // ViewModel初期化時に現在のユーザー名を設定
         viewModelScope.launch {
-            val user = userRepository.getUserById(currentActiveUserId)
-            _uiState.update { it.copy(currentUserName = user?.name ?: "Player $currentActiveUserId") }
-        }
-    }
-
-
-    private fun refreshDraftsFlow() {
-        draftsFlow = throwRepository.getDrafts(currentActiveUserId)
-            .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
-        // combine フローが再評価されるように、_uiStateも更新トリガーをかける
-        _uiState.update { it.copy(currentUserId = currentActiveUserId) }
-    }
-
-    fun switchUser(userId: Int) {
-        viewModelScope.launch {
-            // ユーザー切り替え前に現在のセッションのダーティチェック
-            if (practiceSessionState.value.isDirty) {
-                // TODO: 未保存データがある場合の処理をユーザーに確認する (ダイアログなど)
-                // ここでは一旦、ダーティなら切り替え前に保存を促すメッセージを出すか、
-                // ViewModelが自動保存するか、破棄するかなどのポリシーを決める必要がある
-                // 今回はまず、ダーティな場合はrequestExitConfirmationを呼んで既存のダイアログフローを使う
-                _uiState.update { it.copy(showUserSwitchConfirmDialog = true, pendingUserSwitchId = userId) }
-                return@launch // ダイアログの応答を待つ
-            }
-            performUserSwitch(userId)
+            // 初期ユーザー名を設定 (これは _currentActiveUserIdFlow を購読しても良い)
+            val user = userRepository.getUserById(_currentActiveUserIdFlow.value)
+            _uiState.update { it.copy(currentUserName = user?.name ?: "Player ${_currentActiveUserIdFlow.value}") }
         }
     }
 
     private fun performUserSwitch(userId: Int) {
-        currentActiveUserId = userId
+        _currentActiveUserIdFlow.value = userId // ★ これで draftsFlow と practiceSessionState が再評価される
         _uiState.update {
             it.copy(
-                currentUserId = userId,
-                // ユーザー切り替え時に練習セッションの状態をリセットする (距離リストなど)
-                configuredDistances = listOf(3.0f, 3.5f, 4.0f), // デフォルトに戻す例
+                currentUserId = userId, // _uiState も更新 (UIの即時反映や他のロジックのため)
+                configuredDistances = listOf(3.0f, 3.5f, 4.0f),
                 activeDistance = 3.0f,
-                sessionWeather = null, // 環境設定もリセット
+                sessionWeather = null,
                 sessionHumidity = null,
                 sessionTemperature = null,
                 sessionSoil = null,
@@ -110,75 +104,89 @@ class PracticeViewModel(
                 pendingUserSwitchId = null
             )
         }
-        refreshDraftsFlow() // 新しいユーザーのドラフトを読み込む
+        // refreshDraftsFlow() は不要になる
+        // ユーザー名も practiceSessionState の combine で更新されるので、ここでの個別設定は不要になるかも
+    }
+
+
+    fun switchUser(userId: Int) { // ロジックはほぼ変更なし
         viewModelScope.launch {
-            val user = userRepository.getUserById(userId)
-            _uiState.update { it.copy(currentUserName = user?.name ?: "Player $userId") }
+            if (practiceSessionState.value.isDirty && practiceSessionState.value.currentUserId != userId) {
+                _uiState.update { it.copy(showUserSwitchConfirmDialog = true, pendingUserSwitchId = userId) }
+                return@launch
+            }
+            performUserSwitch(userId)
         }
     }
 
-    fun confirmAndSwitchUser(saveCurrent: Boolean) {
+    fun confirmAndSwitchUser(saveCurrent: Boolean) { // ロジックはほぼ変更なし
         val pendingUserId = _uiState.value.pendingUserSwitchId
         if (pendingUserId == null) {
             _uiState.update { it.copy(showUserSwitchConfirmDialog = false) }
             return
         }
+        val previousUserId = practiceSessionState.value.currentUserId
 
         viewModelScope.launch {
             if (saveCurrent && practiceSessionState.value.isDirty) {
-                throwRepository.commitDrafts(practiceSessionState.value.currentUserId) // 前のユーザーのドラフトを保存
+                throwRepository.commitDrafts(previousUserId)
             } else if (!saveCurrent && practiceSessionState.value.isDirty) {
-                throwRepository.clearAllDrafts(practiceSessionState.value.currentUserId) // 前のユーザーのドラフトを破棄
+                throwRepository.clearAllDrafts(previousUserId)
             }
-            // 状態をリセットしてからユーザーを切り替える
-            _uiState.update { it.copy(isDirty = false, canUndo = false, showUserSwitchConfirmDialog = false) } // isDirtyなどを強制リセット
+            // isDirtyなどはdraftsFlowの変更を通じてpracticeSessionStateが更新されるので、
+            // ここでの強制リセットは不要になるかもしれないが、念のため残すか、
+            // performUserSwitch後の状態を信頼する。
+            _uiState.update { it.copy(showUserSwitchConfirmDialog = false) } // ダイアログを閉じる
             performUserSwitch(pendingUserId)
         }
     }
-
-    fun cancelUserSwitch() {
-        _uiState.update { it.copy(showUserSwitchConfirmDialog = false, pendingUserSwitchId = null) }
-    }
+    fun cancelUserSwitch() { /* 変更なし */ _uiState.update { it.copy(showUserSwitchConfirmDialog = false, pendingUserSwitchId = null) } }
 
 
-    fun addNewUser(userName: String) {
+    fun addNewUser(userName: String) { // ほぼ変更なし、performUserSwitch を使う
         viewModelScope.launch {
             if (userName.isNotBlank()) {
-                // 同じ名前のユーザーがいないか確認 (オプション)
                 val existingUser = availableUsers.value.find { it.name.equals(userName, ignoreCase = true) }
                 if (existingUser == null) {
                     val newUser = User(name = userName, created_at = System.currentTimeMillis())
                     val newUserId = userRepository.insertUser(newUser)
-                    if (newUserId > 0) { // 挿入成功
-                        // 新規ユーザーに即座に切り替える
-                        performUserSwitch(newUserId.toInt())
-                        dismissUserDialog() // ダイアログを閉じる
+                    if (newUserId > 0) {
+                        performUserSwitch(newUserId.toInt()) // ★ performUserSwitch を呼び出す
+                        dismissUserDialog()
                     } else {
-                        // 挿入失敗時のエラーハンドリング
                         _uiState.update { it.copy(userDialogErrorMessage = "Failed to create user.") }
                     }
                 } else {
-                    // ユーザー名重複時のエラーハンドリング
                     _uiState.update { it.copy(userDialogErrorMessage = "User name already exists.") }
                 }
             } else {
-                // ユーザー名が空の場合のエラーハンドリング
                 _uiState.update { it.copy(userDialogErrorMessage = "User name cannot be empty.") }
             }
         }
     }
 
-    // --- 既存のメソッド群 ---
     fun addThrow(isSuccess: Boolean) {
         viewModelScope.launch {
-            val currentUiState = practiceSessionState.value
-            val currentDistance = currentUiState.activeDistance ?: return@launch
-            val currentAngle = currentUiState.selectedAngle
+            val currentUiState = practiceSessionState.value // combineされた最新の状態
+            val currentDistance = currentUiState.activeDistance
+            val activeUserIdForDraft = _currentActiveUserIdFlow.value // ★ 常に最新のユーザーIDを使用
+
+            android.util.Log.d(
+                "ViewModelAddThrow",
+                "addThrow called. currentActiveUserId (from Flow): $activeUserIdForDraft, " +
+                        "activeDistance from _uiState: ${_uiState.value.activeDistance}, " +
+                        "activeDistance from practiceSessionState: $currentDistance"
+            )
+
+            if (currentDistance == null) {
+                android.util.Log.w("ViewModelAddThrow", "addThrow returning early: currentDistance from practiceSessionState is null.")
+                return@launch
+            }
 
             val newDraft = ThrowDraft(
-                userId = currentActiveUserId, // ★ 現在アクティブなユーザーIDを使用
+                userId = activeUserIdForDraft, // ★ _currentActiveUserIdFlow.value を使用
                 distance = currentDistance,
-                angle = currentAngle,
+                angle = currentUiState.selectedAngle,
                 isSuccess = isSuccess,
                 timestamp = Date().time,
                 weather = currentUiState.sessionWeather,
@@ -187,14 +195,20 @@ class PracticeViewModel(
                 soil = currentUiState.sessionSoil,
                 molkkyWeight = currentUiState.sessionMolkkyWeight
             )
-            throwRepository.insertDraft(newDraft)
+            android.util.Log.d("ViewModelAddThrow", "Attempting to insert draft for userId $activeUserIdForDraft: $newDraft")
+            try {
+                throwRepository.insertDraft(newDraft)
+                android.util.Log.d("ViewModelAddThrow", "Draft insertion call completed for userId $activeUserIdForDraft.")
+            } catch (e: Exception) {
+                android.util.Log.e("ViewModelAddThrow", "Error inserting draft for userId $activeUserIdForDraft", e)
+            }
         }
     }
-
+    // ... 他のメソッド (undo, save, confirmDiscardAndExitなども currentActiveUserId の代わりに _currentActiveUserIdFlow.value を参照するように変更)
     fun undo() {
         viewModelScope.launch {
             if (practiceSessionState.value.canUndo) {
-                throwRepository.deleteLastDraft(currentActiveUserId) // ★ 現在アクティブなユーザーIDを使用
+                throwRepository.deleteLastDraft(_currentActiveUserIdFlow.value) // ★
             }
         }
     }
@@ -202,17 +216,23 @@ class PracticeViewModel(
     fun save() {
         viewModelScope.launch {
             if (practiceSessionState.value.isDirty) {
-                throwRepository.commitDrafts(currentActiveUserId) // ★ 現在アクティブなユーザーIDを使用
+                throwRepository.commitDrafts(_currentActiveUserIdFlow.value) // ★
                 _uiState.update { it.copy(showExitConfirmDialog = false) }
             }
         }
     }
-
-    fun selectDistance(distance: Float) { /* 変更なし */ _uiState.update { it.copy(activeDistance = distance) } }
-    fun selectAngle(angle: String) { /* 変更なし */ _uiState.update { it.copy(selectedAngle = angle) } }
-    fun requestAddDistance() { /* 変更なし */ _uiState.update { it.copy(showAddDistanceDialog = true) } }
-    fun cancelAddDistance() { /* 変更なし */ _uiState.update { it.copy(showAddDistanceDialog = false) } }
-    fun confirmAddDistance(newDistanceStr: String) { /* 変更なし */
+    fun confirmDiscardAndExit() {
+        viewModelScope.launch {
+            throwRepository.clearAllDrafts(_currentActiveUserIdFlow.value) // ★
+            _uiState.update { it.copy(showExitConfirmDialog = false) }
+        }
+    }
+    // ... (selectDistance, selectAngle, etc. は _uiState を更新するので変更なし)
+    fun selectDistance(distance: Float) { _uiState.update { it.copy(activeDistance = distance) } }
+    fun selectAngle(angle: String) { _uiState.update { it.copy(selectedAngle = angle) } }
+    fun requestAddDistance() { _uiState.update { it.copy(showAddDistanceDialog = true) } }
+    fun cancelAddDistance() { _uiState.update { it.copy(showAddDistanceDialog = false) } }
+    fun confirmAddDistance(newDistanceStr: String) {
         val newDistance = newDistanceStr.toFloatOrNull()
         if (newDistance != null && newDistance > 0) {
             _uiState.update { currentState ->
@@ -227,28 +247,24 @@ class PracticeViewModel(
             _uiState.update { it.copy(showAddDistanceDialog = false) }
         }
     }
-    fun requestExitConfirmation() { /* 変更なし */
+    fun requestExitConfirmation() {
         if (practiceSessionState.value.isDirty) {
             _uiState.update { it.copy(showExitConfirmDialog = true) }
         }
     }
-    fun confirmSaveAndExit() { /* 変更なし */ save() }
-    fun confirmDiscardAndExit() { /* 変更なし */
-        viewModelScope.launch {
-            throwRepository.clearAllDrafts(currentActiveUserId) // ★ 現在アクティブなユーザーIDを使用
-            _uiState.update { it.copy(showExitConfirmDialog = false) }
-        }
-    }
-    fun cancelExit() { /* 変更なし */ _uiState.update { it.copy(showExitConfirmDialog = false) } }
+    fun confirmSaveAndExit() { save() }
 
-    fun onNameButtonClicked() { /* 変更なし */ _uiState.update { it.copy(showUserDialog = true, userDialogErrorMessage = null) } } // エラーメッセージをリセット
-    fun dismissUserDialog() { /* 変更なし */ _uiState.update { it.copy(showUserDialog = false, userDialogErrorMessage = null) } }
+    fun cancelExit() { _uiState.update { it.copy(showExitConfirmDialog = false) } }
 
-    fun onEnvConfigButtonClicked() { /* 変更なし */ _uiState.update { it.copy(showEnvConfigDialog = true) } }
-    fun dismissEnvConfigDialog() { /* 変更なし */ _uiState.update { it.copy(showEnvConfigDialog = false) } }
-    fun updateSessionWeather(weather: String?) { /* 変更なし */ _uiState.update { it.copy(sessionWeather = weather) } }
-    fun updateSessionHumidity(humidity: Float?) { /* 変更なし */ _uiState.update { it.copy(sessionHumidity = humidity) } }
-    fun updateSessionTemperature(temperature: Float?) { /* 変更なし */ _uiState.update { it.copy(sessionTemperature = temperature) } }
-    fun updateSessionSoil(soil: String?) { /* 変更なし */ _uiState.update { it.copy(sessionSoil = soil) } }
-    fun updateSessionMolkkyWeight(weight: Float?) { /* 変更なし */ _uiState.update { it.copy(sessionMolkkyWeight = weight) } }
+    fun onNameButtonClicked() { _uiState.update { it.copy(showUserDialog = true, userDialogErrorMessage = null) } }
+    fun dismissUserDialog() { _uiState.update { it.copy(showUserDialog = false, userDialogErrorMessage = null) } }
+
+    fun onEnvConfigButtonClicked() { _uiState.update { it.copy(showEnvConfigDialog = true) } }
+    fun dismissEnvConfigDialog() { _uiState.update { it.copy(showEnvConfigDialog = false) } }
+    fun updateSessionWeather(weather: String?) { _uiState.update { it.copy(sessionWeather = weather) } }
+    fun updateSessionHumidity(humidity: Float?) { _uiState.update { it.copy(sessionHumidity = humidity) } }
+    fun updateSessionTemperature(temperature: Float?) { _uiState.update { it.copy(sessionTemperature = temperature) } }
+    fun updateSessionSoil(soil: String?) { _uiState.update { it.copy(sessionSoil = soil) } }
+    fun updateSessionMolkkyWeight(weight: Float?) { _uiState.update { it.copy(sessionMolkkyWeight = weight) } }
+
 }

@@ -225,21 +225,62 @@ fun PracticePage(
             Spacer(Modifier.height(16.dp))
 
             // OK / FAIL Buttons (Existing, no changes needed here) [cite: 2]
+
+//            Row(
+//                modifier = Modifier.fillMaxWidth(),
+//                horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally)
+//            ) {
+//                Button(
+//                    onClick = { viewModel.addThrow(true) },
+//                    modifier = Modifier.weight(1f),
+//                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFADDDCE)),
+//                    enabled = uiState.activeDistance != null // Enable only if a distance is active
+//                ) { Text("OK", fontSize = 18.sp) }
+//                Button(
+//                    onClick = { viewModel.addThrow(false) },
+//                    modifier = Modifier.weight(1f),
+//                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFC0CB)),
+//                    enabled = uiState.activeDistance != null // Enable only if a distance is active
+//                ) { Text("FAIL", fontSize = 18.sp) }
+//            }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally)
             ) {
+                val isButtonActuallyEnabled = uiState.activeDistance != null // ★ 条件を変数に格納
+
                 Button(
-                    onClick = { viewModel.addThrow(true) },
+                    onClick = {
+                        android.util.Log.d("PracticePage", "OK Button clicked. activeDistance: ${uiState.activeDistance}")
+                        if (isButtonActuallyEnabled) { // ★ 再度ここでチェック
+                            viewModel.addThrow(true)
+                        } else {
+                            android.util.Log.w("PracticePage", "OK Button was clicked but it should be disabled!")
+                        }
+                    },
                     modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFADDDCE)),
-                    enabled = uiState.activeDistance != null // Enable only if a distance is active
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (isButtonActuallyEnabled) Color(0xFFADDDCE) else MaterialTheme.colorScheme.surfaceVariant, // ★ 色も明示的に変えてみる
+                        contentColor = if (isButtonActuallyEnabled) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                    ),
+                    enabled = isButtonActuallyEnabled // ★ ここは変更なし
                 ) { Text("OK", fontSize = 18.sp) }
+
                 Button(
-                    onClick = { viewModel.addThrow(false) },
+                    onClick = {
+                        android.util.Log.d("PracticePage", "FAIL Button clicked. activeDistance: ${uiState.activeDistance}")
+                        if (isButtonActuallyEnabled) { // ★ 再度ここでチェック
+                            viewModel.addThrow(false)
+                        } else {
+                            android.util.Log.w("PracticePage", "FAIL Button was clicked but it should be disabled!")
+                        }
+                    },
                     modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFC0CB)),
-                    enabled = uiState.activeDistance != null // Enable only if a distance is active
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (isButtonActuallyEnabled) Color(0xFFFFC0CB) else MaterialTheme.colorScheme.surfaceVariant, // ★ 色も明示的に変えてみる
+                        contentColor = if (isButtonActuallyEnabled) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                    ),
+                    enabled = isButtonActuallyEnabled // ★ ここは変更なし
                 ) { Text("FAIL", fontSize = 18.sp) }
             }
             Spacer(Modifier.height(16.dp))
