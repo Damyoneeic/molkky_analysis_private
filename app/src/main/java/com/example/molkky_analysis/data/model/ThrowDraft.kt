@@ -22,11 +22,11 @@ import androidx.room.PrimaryKey
 )
 data class ThrowDraft(
     @PrimaryKey(autoGenerate = true)
-    val id: Int = 0,
+    var id: Int = 0, // Changed to var
     @ColumnInfo(name = "user_id")
     val userId: Int,
     val distance: Float,
-    val angle: String, // CHECK(angle IN ('LEFT','CENTER','RIGHT')) [cite: 8]
+    val angle: String, // CHECK(angle IN ('LEFT','CENTER','RIGHT'))
     val weather: String?,
     val humidity: Float?,
     val temperature: Float?,
@@ -34,6 +34,6 @@ data class ThrowDraft(
     @ColumnInfo(name = "molkky_weight")
     val molkkyWeight: Float?,
     @ColumnInfo(name = "is_success")
-    val isSuccess: Boolean, // CHECK(is_success IN (0,1)) [cite: 8]
-    val timestamp: Long // UNIX ms [cite: 9]
+    val isSuccess: Boolean, // CHECK(is_success IN (0,1))
+    val timestamp: Long // UNIX ms
 )

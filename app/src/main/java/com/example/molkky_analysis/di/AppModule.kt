@@ -20,7 +20,6 @@ import com.example.molkky_analysis.ui.analysis.AnalysisViewModel
 val appModule = module {
     // Database
     single {
-        // ★ AppDatabase.getDatabase() を呼び出すだけにする
         AppDatabase.getDatabase(androidContext())
     }
 
@@ -33,7 +32,8 @@ val appModule = module {
     single<IThrowRepository> { ThrowRepository(get()) }
 
     // ViewModels
-    viewModel { (userId: Int) -> PracticeViewModel(get(), get(), userId) }
+    // viewModel { (userId: Int) -> PracticeViewModel(get(), get(), userId) } // ★ 修正前: Int型を期待していた箇所
+    viewModel { PracticeViewModel(get(), get(), androidContext()) } // ★ 修正後: androidContext() を渡す
     viewModel { DataViewModel(get(), get()) }
     viewModel { AnalysisViewModel(get(), get()) }
 }

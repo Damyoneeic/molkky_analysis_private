@@ -1,6 +1,6 @@
 package com.example.molkky_analysis.ui.practice
 
-import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Delete // UserManagementDialogで使用
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -15,33 +15,23 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.RectangleShape // SimpleRectanglePlaceholderで使用 (今回は未使用)
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import com.example.molkky_analysis.ui.theme.Molkky_analysisTheme
+// import androidx.compose.ui.window.Dialog // AlertDialogを使用するため直接は不要
 import com.example.molkky_analysis.data.model.User
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.ui.input.pointer.pointerInput // Import this for detectTapGestures
-import androidx.compose.foundation.gestures.detectTapGestures // Import this for detectTapGestures
+import androidx.compose.material.icons.filled.ArrowDropDown // EnvConfigDialogで使用
+// import androidx.compose.material.icons.filled.Close // SessionTabsUIのコメントアウト部分で使用案あり
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
 import android.util.Log
-
-// Iconの代わりに表示するシンプルな長方形のComposable (変更なし)
-@Composable
-fun SimpleRectanglePlaceholder(modifier: Modifier = Modifier, color: Color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)) {
-    Box(
-        modifier = modifier
-            .size(24.dp)
-            .background(color, shape = RectangleShape)
-    )
-}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -51,11 +41,20 @@ fun PracticePage(
 ) {
     Log.d("PracticePage_Entry", "PracticePage Composable INVOKED")
     val uiState by viewModel.practiceSessionState.collectAsState()
-    android.util.Log.d("PracticePage", "PracticePage recomposing. uiState.activeDistance: ${uiState.activeDistance}")
-    android.util.Log.d("PracticePage", "uiState.configuredDistances: ${uiState.configuredDistances}")
-    android.util.Log.d("PracticePage", "uiState.configuredDistances size: ${uiState.configuredDistances.size}")
 
-    // --- Dialogs ---
+    if (uiState.isLoading) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator()
+            Log.d("PracticePage", "Showing loading indicator")
+        }
+        return
+    }
+
+    val currentSession = uiState.currentSessionState
+    Log.d("PracticePage", "isLoading is false. currentSession: $currentSession, currentActiveSessionId: ${uiState.currentActiveSessionId}, all sessions count: ${uiState.sessions.size}")
+
+    // --- ダイアログ表示ロジック ---
+    // currentSessionがnullでも表示される可能性のあるダイアログ (確認ダイアログなど)
     if (uiState.showExitConfirmDialog) {
         ConfirmExitDialog(
             onSave = {
@@ -69,37 +68,21 @@ fun PracticePage(
             onCancel = viewModel::cancelExit
         )
     }
-
-    if (uiState.showAddDistanceDialog) {
-        AddDistanceDialog(
-            onDismiss = viewModel::cancelAddDistance,
-            onConfirm = { distanceStr ->
-                viewModel.confirmAddDistance(distanceStr)
-            }
+    if (uiState.showDeleteDistanceConfirmDialog) { // これは currentSession がないと distanceToDelete が設定されないはず
+        DeleteDistanceConfirmationDialog(
+            distance = uiState.distanceToDelete ?: 0f,
+            onConfirm = viewModel::confirmDeleteDistance,
+            onCancel = viewModel::cancelDeleteDistance
         )
     }
-
-    if (uiState.showUserDialog) {
-        UserManagementDialog(
-            availableUsers = uiState.availableUsers,
-            currentUser = uiState.availableUsers.find { it.id == uiState.currentUserId },
-            onDismiss = viewModel::dismissUserDialog,
-            onUserSelected = { user ->
-                viewModel.switchUser(user.id)
-                // viewModel.dismissUserDialog() // Dialog closed by selection or explicit close button
-            },
-            onAddNewUser = { userName ->
-                viewModel.addNewUser(userName)
-            },
-            onDeleteUserClicked = { user ->
-                viewModel.requestDeleteUser(user)
-            },
-            errorMessage = uiState.userDialogErrorMessage,
-            currentUserId = uiState.currentUserId
+    if (uiState.showDeleteUserConfirmDialog) { // グローバルなユーザー削除
+        DeleteUserConfirmationDialog(
+            user = uiState.userToDelete,
+            onConfirm = viewModel::confirmDeleteUser,
+            onCancel = viewModel::cancelDeleteUser
         )
     }
-
-    if (uiState.showUserSwitchConfirmDialog) {
+    if (uiState.showUserSwitchConfirmDialog) { // 特定セッションのユーザー切り替え確認
         AlertDialog(
             onDismissRequest = viewModel::cancelUserSwitch,
             title = { Text("Switch User") },
@@ -113,57 +96,39 @@ fun PracticePage(
                 Button(onClick = { viewModel.confirmAndSwitchUser(saveCurrent = false) }) {
                     Text("Discard and Switch")
                 }
-            },
-            properties = androidx.compose.ui.window.DialogProperties(dismissOnBackPress = true, dismissOnClickOutside = true)
+            }
         )
     }
-
-    // Only one EnvConfigDialog block is needed
-    if (uiState.showEnvConfigDialog) {
-        EnvConfigDialog(
-            initialWeather = uiState.sessionWeather,
-            initialTemperature = uiState.sessionTemperature,
-            initialHumidity = uiState.sessionHumidity,
-            initialSoil = uiState.sessionSoil, // Ground maps to soil
-            onDismiss = viewModel::dismissEnvConfigDialog,
-            onReset = viewModel::resetEnvironmentConfiguration, // ★ Resetコールバックを追加
-            onApply = { weather, temperature, humidity, soil ->
-                viewModel.updateSessionWeather(weather)
-                viewModel.updateSessionTemperature(temperature)
-                viewModel.updateSessionHumidity(humidity)
-                viewModel.updateSessionSoil(soil) // Ground maps to soil
-                viewModel.dismissEnvConfigDialog()
+    if (uiState.showAddDistanceDialog) { // currentSessionがnullでもダイアログ自体は表示できるが、confirmはcurrentSessionに依存
+        AddDistanceDialog(
+            onDismiss = viewModel::cancelAddDistanceDialog,
+            onConfirm = { distanceStr ->
+                viewModel.confirmAddDistance(distanceStr)
             }
         )
     }
 
 
-    // New: Delete Distance Confirmation Dialog
-    if (uiState.showDeleteDistanceConfirmDialog) {
-        DeleteDistanceConfirmationDialog(
-            distance = uiState.distanceToDelete ?: 0f, // Provide a default or handle null
-            onConfirm = viewModel::confirmDeleteDistance,
-            onCancel = viewModel::cancelDeleteDistance
-        )
-    }
-
-    if (uiState.showDeleteUserConfirmDialog) {
-        DeleteUserConfirmationDialog(
-            user = uiState.userToDelete,
-            onConfirm = viewModel::confirmDeleteUser,
-            onCancel = viewModel::cancelDeleteUser
-        )
-    }
-
-
-    // --- Back Handler for Unsaved Data ---
-    BackHandler(enabled = uiState.isDirty) {
-        viewModel.requestExitConfirmation()
-    }
-
+    // currentSession が null の場合は、セッションタブとフォールバックメッセージのみ表示
     Scaffold(
         modifier = Modifier.fillMaxSize(),
+        topBar = {
+            SessionTabsUI(uiState = uiState, viewModel = viewModel)
+        }
     ) { paddingValues ->
+        if (currentSession == null) {
+            Column(
+                modifier = Modifier.padding(paddingValues).fillMaxSize(),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text("No active session. Please select or add a session.")
+                Log.e("PracticePage", "currentSession is null after loading. Cannot render main content area.")
+            }
+            return@Scaffold
+        }
+
+        // currentSession が null でない場合のメインコンテンツ
         Column(
             modifier = Modifier
                 .padding(paddingValues)
@@ -171,60 +136,43 @@ fun PracticePage(
                 .fillMaxSize(),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            // Name Button と Env Config Button
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Button(onClick = viewModel::onNameButtonClicked) {
-//                    SimpleRectanglePlaceholder()
-//                    Spacer(Modifier.width(8.dp))
-                    Text(uiState.currentUserName)
+                    Text(currentSession.currentUserName)
                 }
                 Button(onClick = viewModel::onEnvConfigButtonClicked) {
-//                    SimpleRectanglePlaceholder()
-//                    Spacer(Modifier.width(8.dp))
                     Text("Env Config")
                 }
             }
             Spacer(Modifier.height(16.dp))
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Text("Session:", style = MaterialTheme.typography.titleSmall)
-                listOf("1", "2", "+").forEach { tabLabel ->
-                    Button(onClick = { /* TODO: viewModel.selectSession(tabLabel) */ }) {
-                        Text(tabLabel)
-                    }
-                }
-            }
-            Spacer(Modifier.height(16.dp))
-
+            // AngleButton
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                AngleButton(label = "LEFT", isSelected = uiState.selectedAngle == "LEFT", onClick = { viewModel.selectAngle("LEFT") })
-                AngleButton(label = "CENTER", isSelected = uiState.selectedAngle == "CENTER", onClick = { viewModel.selectAngle("CENTER") })
-                AngleButton(label = "RIGHT", isSelected = uiState.selectedAngle == "RIGHT", onClick = { viewModel.selectAngle("RIGHT") })
+                AngleButton(label = "LEFT", isSelected = currentSession.selectedAngle == "LEFT", onClick = { viewModel.selectAngle("LEFT") })
+                AngleButton(label = "CENTER", isSelected = currentSession.selectedAngle == "CENTER", onClick = { viewModel.selectAngle("CENTER") })
+                AngleButton(label = "RIGHT", isSelected = currentSession.selectedAngle == "RIGHT", onClick = { viewModel.selectAngle("RIGHT") })
             }
             Spacer(Modifier.height(16.dp))
 
+            // 「OK」「FAIL」ボタン
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally)
             ) {
-                val isButtonActuallyEnabled = uiState.activeDistance != null
+                val isButtonActuallyEnabled = currentSession.activeDistance != null
+                Log.d("PracticePage", "OK/Fail Buttons: isButtonActuallyEnabled = $isButtonActuallyEnabled (activeDistance: ${currentSession.activeDistance})")
 
                 Button(
-                    onClick = {
-                        if (isButtonActuallyEnabled) {
-                            viewModel.addThrow(true)
-                        }
-                    },
+                    onClick = { if (isButtonActuallyEnabled) viewModel.addThrow(true) },
                     modifier = Modifier.weight(1f).defaultMinSize(minHeight = 72.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = if (isButtonActuallyEnabled) Color(0xFFADDDCE) else MaterialTheme.colorScheme.surfaceVariant,
@@ -234,11 +182,7 @@ fun PracticePage(
                 ) { Text("OK", fontSize = 18.sp) }
 
                 Button(
-                    onClick = {
-                        if (isButtonActuallyEnabled) {
-                            viewModel.addThrow(false)
-                        }
-                    },
+                    onClick = { if (isButtonActuallyEnabled) viewModel.addThrow(false) },
                     modifier = Modifier.weight(1f).defaultMinSize(minHeight = 72.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = if (isButtonActuallyEnabled) Color(0xFFFFC0CB) else MaterialTheme.colorScheme.surfaceVariant,
@@ -249,29 +193,23 @@ fun PracticePage(
             }
             Spacer(Modifier.height(16.dp))
 
-            if (uiState.configuredDistances.isEmpty()) {
-                android.util.Log.d("PracticePage", "configuredDistances IS EMPTY, showing Text.")
+            // 距離リスト
+            if (currentSession.configuredDistances.isEmpty()) {
                 Text("Add practice distances using the '+ Add Distance' button.", modifier = Modifier.padding(vertical = 20.dp))
             } else {
-                android.util.Log.d("PracticePage", "configuredDistances IS NOT EMPTY, showing LazyColumn.")
                 LazyColumn(modifier = Modifier.weight(1f)) {
-                    items(uiState.configuredDistances, key = { it }) { distance ->
-                        android.util.Log.d("PracticePage", "LazyColumn item lambda ENTERED for distance: $distance")
-                        val throwsAtThisDistance = uiState.throwsGroupedByDistance[distance] ?: emptyList()
+                    items(currentSession.configuredDistances, key = { it }) { distance ->
+                        val throwsAtThisDistance = currentSession.throwsGroupedByDistance[distance] ?: emptyList()
                         val successes = throwsAtThisDistance.count { it.isSuccess }
                         val attempts = throwsAtThisDistance.size
-                        val isActive = uiState.activeDistance == distance
-                        android.util.Log.d("PracticePage", "DistanceRowItem for distance: $distance, uiState.activeDistance: ${uiState.activeDistance}, isActive: $isActive")
+                        val isActive = currentSession.activeDistance == distance
                         DistanceRowItem(
                             distance = distance,
                             successCount = successes,
                             attemptCount = attempts,
-                            isActive = uiState.activeDistance == distance,
-                            onTap = {
-                                viewModel.selectDistance(distance)
-                                android.util.Log.d("PracticePage", "DistanceRowItem TAPPED for distance: $distance")
-                                    },
-                            onLongPress = { viewModel.requestDeleteDistance(distance) } // Add long press action
+                            isActive = isActive,
+                            onTap = { viewModel.selectDistance(distance) },
+                            onLongPress = { viewModel.requestDeleteDistance(distance) }
                         )
                         Spacer(Modifier.height(8.dp))
                     }
@@ -279,46 +217,116 @@ fun PracticePage(
             }
             Spacer(Modifier.height(8.dp))
 
+            // Add Distance と Undo ボタン
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
+                horizontalArrangement = Arrangement.spacedBy(16.dp) // 水平方向のスペース
             ) {
                 Button(
-                    onClick = viewModel::requestAddDistance,
-                    modifier = Modifier.weight(1f)
+                    onClick = viewModel::requestAddDistanceDialog,
+                    modifier = Modifier.weight(1f) // ★ weight を適用
                 ) {
-//                    SimpleRectanglePlaceholder()
-//                    Spacer(Modifier.width(4.dp))
                     Text("Add Distance")
                 }
                 Button(
                     onClick = viewModel::undo,
-                    enabled = uiState.canUndo,
-                    modifier = Modifier.weight(1f)
+                    enabled = currentSession.canUndo,
+                    modifier = Modifier.weight(1f) // ★ weight を適用
                 ) {
-//                    SimpleRectanglePlaceholder()
-//                    Spacer(Modifier.width(4.dp))
                     Text("Undo")
                 }
             }
             Spacer(Modifier.height(16.dp))
 
+            // Save と Return ボタン
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
                 Button(
-                    onClick = viewModel::save,
-                    enabled = uiState.isDirty
-                ) { Text("Save") }
+                    onClick = viewModel::saveCurrentSession, // 現在のセッションのみ保存
+                    enabled = currentSession.isDirty && currentSession.drafts.isNotEmpty()
+                ) { Text("Save Session") }
                 Button(onClick = {
-                    if (uiState.isDirty) {
+                    if (uiState.sessions.values.any { it.isDirty && it.drafts.isNotEmpty() }) { // 全セッションのダーティ状態を確認
                         viewModel.requestExitConfirmation()
                     } else {
                         onReturnToHome()
                     }
                 }) { Text("Return") }
             }
+        } // End of Main Content Column (if currentSession != null)
+    } // End of Scaffold
+
+    // --- currentSession に依存するダイアログ ---
+    // これらは currentSession が null でない場合にのみ意味を持つか、表示されるべき
+    if (currentSession != null) {
+        if (uiState.showUserDialog) {
+            UserManagementDialog(
+                availableUsers = uiState.availableUsers,
+                currentUser = uiState.availableUsers.find { it.id == currentSession.currentUserId },
+                onDismiss = viewModel::dismissUserDialog,
+                onUserSelected = { user -> viewModel.switchUserForCurrentSession(user.id) },
+                onAddNewUser = { userName -> viewModel.addNewUserAndSwitch(userName) },
+                onDeleteUserClicked = { user -> viewModel.requestDeleteUser(user) }, // これはグローバルだが、ダイアログのトリガーはここ
+                errorMessage = uiState.userDialogErrorMessage,
+                currentUserId = currentSession.currentUserId // 削除ボタンの有効化判定に使用
+            )
+        }
+        if (uiState.showEnvConfigDialog) {
+            EnvConfigDialog(
+                initialWeather = currentSession.sessionWeather,
+                initialTemperature = currentSession.sessionTemperature,
+                initialHumidity = currentSession.sessionHumidity,
+                initialSoil = currentSession.sessionSoil,
+                onDismiss = viewModel::dismissEnvConfigDialog,
+                onReset = viewModel::resetEnvironmentConfiguration,
+                onApply = { weather, temperature, humidity, soil ->
+                    viewModel.updateSessionWeather(weather)
+                    viewModel.updateSessionTemperature(temperature)
+                    viewModel.updateSessionHumidity(humidity)
+                    viewModel.updateSessionSoil(soil)
+                    viewModel.dismissEnvConfigDialog()
+                }
+            )
+        }
+        // BackHandler は currentSession が null でない場合にのみ意味がある
+        BackHandler(enabled = currentSession.isDirty && currentSession.drafts.isNotEmpty()) {
+            viewModel.requestExitConfirmation()
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class) // SessionTabsUIにも必要に応じて
+@Composable
+fun SessionTabsUI(uiState: PracticeUiState, viewModel: PracticeViewModel) {
+    ScrollableTabRow(
+        selectedTabIndex = uiState.activeSessionTabs.indexOf(uiState.currentActiveSessionId)
+            .coerceAtLeast(0).let { if (uiState.activeSessionTabs.isEmpty() && it == -1) 0 else it } // 空の場合の-1を0に
+            .coerceAtMost(if (uiState.activeSessionTabs.isEmpty()) 0 else uiState.activeSessionTabs.size - 1)
+    ) {
+        uiState.activeSessionTabs.forEachIndexed { index, sessionId ->
+            val sessionTabInfo = uiState.sessions[sessionId]
+            Tab(
+                selected = uiState.currentActiveSessionId == sessionId,
+                onClick = { viewModel.selectSession(sessionId) },
+                text = { Text(sessionTabInfo?.currentUserName?.take(10) ?: "S ${index + 1}") }
+                // TODO: セッションクローズボタン (IconButton(onClick = { viewModel.closeSession(sessionId) }) { Icon(Icons.Default.Close, "") })
+            )
+        }
+        if (uiState.sessions.size < 5) { // PracticeViewModel.MAX_SESSIONS を参照すべきだが、直接定数を使用
+            Tab(
+                selected = false,
+                onClick = { viewModel.addSession() },
+                text = { Text("+") }
+            )
+        } else if (uiState.activeSessionTabs.isEmpty() && uiState.sessions.isEmpty()) {
+            // セッションが全くない場合（初期状態など）にも「＋」タブを表示してセッション作成を促す
+            Tab(
+                selected = false,
+                onClick = { viewModel.addSession() },
+                text = { Text("+") }
+            )
         }
     }
 }

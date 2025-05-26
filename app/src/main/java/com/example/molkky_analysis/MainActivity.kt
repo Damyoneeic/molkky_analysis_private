@@ -12,8 +12,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-// import androidx.compose.ui.graphics.vector.ImageVector // ImageVectorのimportは不要になる
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalContext // Context取得に必要
 import androidx.compose.ui.tooling.preview.Devices
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -23,10 +22,10 @@ import com.example.molkky_analysis.ui.analysis.AnalysisScreen
 import com.example.molkky_analysis.ui.data_display.DataScreen
 import com.example.molkky_analysis.ui.practice.PracticePage
 import com.example.molkky_analysis.ui.practice.PracticeViewModel
-import com.example.molkky_analysis.ui.settings.SettingsScreenLayout // こちらの関数名に合わせています
+import com.example.molkky_analysis.ui.settings.SettingsScreenLayout
 import com.example.molkky_analysis.ui.theme.Molkky_analysisTheme
-import com.example.molkky_analysis.data.repository.UserRepository // UserRepository をインポート
-import com.example.molkky_analysis.data.repository.IUserRepository
+import com.example.molkky_analysis.data.repository.UserRepository
+// import com.example.molkky_analysis.data.repository.IUserRepository // 未使用であれば削除
 import com.example.molkky_analysis.ui.data_display.DataViewModel
 import com.example.molkky_analysis.ui.analysis.AnalysisViewModel
 import androidx.compose.ui.unit.sp
@@ -45,11 +44,9 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-// AppDestinations enum から icon プロパティを削除
 enum class AppDestinations(
     val routeName: String,
     val label: String
-    // val icon: ImageVector // アイコンプロパティを削除
 ) {
     PAGE1("Page1", "Page 1"),
     PRACTICE("PracticePage", "Practice"),
@@ -61,12 +58,15 @@ enum class AppDestinations(
 @Composable
 fun Molkky_analysisApp() {
     var currentDestination by rememberSaveable { mutableStateOf(AppDestinations.PAGE1) }
-    val context = LocalContext.current
+    val context = LocalContext.current // ★ Context をここで取得
     val appDatabase = remember { AppDatabase.getDatabase(context) }
     val throwRepository = remember { ThrowRepository(appDatabase.throwDao()) }
-    val userRepository = remember { UserRepository(appDatabase.userDao()) } // ★ UserRepository を作成
+    val userRepository = remember { UserRepository(appDatabase.userDao()) }
+
+    // ★ PracticeViewModelFactory の修正
     val practiceViewModelFactory = remember {
-        { userId: Int -> PracticeViewModel(throwRepository, userRepository, userId) }
+        // userId: Int は不要になり、代わりに context を渡す
+        { PracticeViewModel(throwRepository, userRepository, context) }
     }
     val dataViewModelFactory = remember {
         { DataViewModel(throwRepository, userRepository) }
@@ -77,23 +77,11 @@ fun Molkky_analysisApp() {
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
-        // bottomBar = { // もしNavigationBarなどがあれば、そこもテキスト表示にするか、コンポーネント自体を削除
-        //     NavigationBar {
-        //         AppDestinations.entries.forEach { destination ->
-        //             NavigationBarItem(
-        //                 selected = currentDestination == destination,
-        //                 onClick = { currentDestination = destination },
-        //                 label = { Text(destination.label) }, // ラベル(テキスト)のみ使用
-        //                 icon = { } // アイコン部分は空にするか、NavigationBarItemのicon引数自体を削除
-        //             )
-        //         }
-        //     }
-        // }
     ) { innerPadding ->
         AppScreen(
             currentDestination = currentDestination,
             onNavigateTo = { destination -> currentDestination = destination },
-            practiceViewModelFactory = practiceViewModelFactory,
+            practiceViewModelFactory = practiceViewModelFactory, // ★ 更新されたファクトリを渡す
             dataViewModelFactory = dataViewModelFactory,
             analysisViewModelFactory = analysisViewModelFactory,
             modifier = Modifier
@@ -107,7 +95,7 @@ fun Molkky_analysisApp() {
 fun AppScreen(
     currentDestination: AppDestinations,
     onNavigateTo: (AppDestinations) -> Unit,
-    practiceViewModelFactory: (Int) -> PracticeViewModel,
+    practiceViewModelFactory: () -> PracticeViewModel, // ★ ファクトリの型を変更 (Int引数を削除)
     dataViewModelFactory: () -> DataViewModel,
     analysisViewModelFactory: () -> AnalysisViewModel,
     modifier: Modifier = Modifier
@@ -122,26 +110,25 @@ fun AppScreen(
                 modifier = Modifier.fillMaxSize()
             )
             AppDestinations.PRACTICE -> {
-                val practiceViewModel = remember { practiceViewModelFactory(1) } // 仮のユーザーID
+                // ★ practiceViewModelFactory の呼び出し方を変更 (引数なし)
+                val practiceViewModel = remember { practiceViewModelFactory() }
                 PracticePage(
                     viewModel = practiceViewModel,
                     onReturnToHome = { onNavigateTo(AppDestinations.PAGE1) }
                 )
             }
             AppDestinations.ANALYSIS -> {
-                val analysisViewModel = remember { analysisViewModelFactory() } // ★ ViewModel取得
-                AnalysisScreen( // AnalysisScreen に ViewModel を渡す
+                val analysisViewModel = remember { analysisViewModelFactory() }
+                AnalysisScreen(
                     viewModel = analysisViewModel,
-                    // pageLabel は不要になるか、ViewModelから取得
                     onReturnToHome = { onNavigateTo(AppDestinations.PAGE1) },
                     modifier = Modifier.fillMaxSize()
                 )
             }
             AppDestinations.DATA -> {
-                val dataViewModel = remember { dataViewModelFactory() } // ★ ViewModel取得
-                DataScreen( // DataScreen に ViewModel を渡すように変更
+                val dataViewModel = remember { dataViewModelFactory() }
+                DataScreen(
                     viewModel = dataViewModel,
-                    // pageLabel は不要になるか、ViewModelから取得するようにする
                     onReturnToHome = { onNavigateTo(AppDestinations.PAGE1) },
                     modifier = Modifier.fillMaxSize()
                 )
@@ -151,19 +138,12 @@ fun AppScreen(
                 onReturnToPage1 = { onNavigateTo(AppDestinations.PAGE1) },
                 modifier = Modifier.fillMaxSize()
             )
-            AppDestinations.ANALYSIS -> {
-                val analysisViewModel = remember { analysisViewModelFactory() } // ★ ViewModel取得
-                AnalysisScreen( // AnalysisScreen に ViewModel を渡す
-                    viewModel = analysisViewModel,
-                    // pageLabel は不要になるか、ViewModelから取得
-                    onReturnToHome = { onNavigateTo(AppDestinations.PAGE1) },
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
+            // 重複していた ANALYSIS の case を削除 (上の case で処理されるため)
         }
     }
 }
 
+// Page1ScreenLayout と Preview は変更なし (以下同様)
 @Composable
 fun Page1ScreenLayout(
     onNavigateTo: (AppDestinations) -> Unit,
@@ -174,12 +154,10 @@ fun Page1ScreenLayout(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        // 「Welcome to Page 1」のテキストと関連するSpacerは削除済み
-
         val buttonModifier = Modifier
-            .width(200.dp) // ボタンの幅を指定 (元の幅に応じて調整してください)
-            .height(80.dp)  // ボタンの高さを指定 (元の高さに応じて調整してください)
-        val buttonSpacerHeight = 16.dp // ボタン間のスペースを少し広めに調整 (お好みで)
+            .width(200.dp)
+            .height(80.dp)
+        val buttonSpacerHeight = 16.dp
 
         Button(
             onClick = { onNavigateTo(AppDestinations.PRACTICE) },
