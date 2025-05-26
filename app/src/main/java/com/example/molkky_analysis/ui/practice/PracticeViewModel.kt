@@ -98,11 +98,11 @@ class PracticeViewModel(
                 configuredDistances = listOf(4.0f),
                 // 修正: activeDistance を PracticeUiState の初期値に合わせる
                 activeDistance = 4.0f,
-                sessionWeather = null,
-                sessionHumidity = null,
-                sessionTemperature = null,
-                sessionSoil = null,
-                sessionMolkkyWeight = null,
+                // sessionWeather = null, // ← この行から
+                // sessionHumidity = null,
+                // sessionTemperature = null,
+                // sessionSoil = null,
+                // sessionMolkkyWeight = null, // ← この行までを削除またはコメントアウト
                 showUserSwitchConfirmDialog = false,
                 pendingUserSwitchId = null,
                 userToDelete = null,
