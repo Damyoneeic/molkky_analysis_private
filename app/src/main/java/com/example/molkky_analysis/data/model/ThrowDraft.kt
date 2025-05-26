@@ -4,7 +4,6 @@ import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.PrimaryKey
-import java.util.UUID // Import UUID
 
 @Entity(
     tableName = "throw_draft",
@@ -18,8 +17,7 @@ import java.util.UUID // Import UUID
     ],
     indices = [
         androidx.room.Index(value = ["user_id"]),
-        androidx.room.Index(value = ["timestamp"]),
-        androidx.room.Index(value = ["user_id", "session_id"]) // Index for session-specific queries
+        androidx.room.Index(value = ["timestamp"])
     ]
 )
 data class ThrowDraft(
@@ -27,10 +25,8 @@ data class ThrowDraft(
     val id: Int = 0,
     @ColumnInfo(name = "user_id")
     val userId: Int,
-    @ColumnInfo(name = "session_id") // New field to identify the session
-    val sessionId: String, // This will typically be the SessionTabUiInfo.id (a UUID)
     val distance: Float,
-    val angle: String,
+    val angle: String, // CHECK(angle IN ('LEFT','CENTER','RIGHT')) [cite: 8]
     val weather: String?,
     val humidity: Float?,
     val temperature: Float?,
@@ -38,6 +34,6 @@ data class ThrowDraft(
     @ColumnInfo(name = "molkky_weight")
     val molkkyWeight: Float?,
     @ColumnInfo(name = "is_success")
-    val isSuccess: Boolean,
-    val timestamp: Long
+    val isSuccess: Boolean, // CHECK(is_success IN (0,1)) [cite: 8]
+    val timestamp: Long // UNIX ms [cite: 9]
 )
